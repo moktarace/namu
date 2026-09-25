@@ -36,6 +36,19 @@ export interface NativeDraft {
   pages: NativePage[];
 }
 export const newNativePage = (): NativePage => ({ id: crypto.randomUUID(), bitmap: '', thumbnail: '', texts: [] });
+export function parseSimpleScript(source: string): string[][] {
+  const pages: string[][] = [[]];
+  for (const raw of source.replace(/\r\n?/g, '\n').split('\n')) {
+    const line = raw.trim();
+    if (/^-{3,}$/.test(line)) { pages.push([]); continue; }
+    if (line.startsWith('-')) {
+      const dialogue = line.replace(/^-+\s*/, '').trim();
+      if (dialogue) pages[pages.length - 1].push(dialogue);
+    }
+  }
+  while (pages.length > 1 && pages.at(-1)!.length === 0) pages.pop();
+  return pages;
+}
 export function newNativeDraft(title: string): NativeDraft {
   return { id: crypto.randomUUID(), title: title.trim() || 'No Title', createdAt: Date.now(), updatedAt: Date.now(), direction: 'rtl', firstSpread: true, guide: '', pages: [newNativePage()] };
 }

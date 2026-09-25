@@ -63,6 +63,26 @@ test('settings stays in the top toolbar after removing the navigation drawer', a
   await expect(page.getByRole('button', { name: 'Add', exact: true })).toBeVisible();
 });
 
+test('creates pages with distributed dialogue text from a simple script', async ({ page }) => {
+  await boot(page);
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByRole('button', { name: 'From script', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Script layout');
+  await page.getByRole('textbox', { name: 'Script', exact: true }).fill('- One\n- Two\n- Three\n- Four');
+  await expect(page.locator('.script-stats')).toHaveText('1 page · 4 dialogues');
+  await page.getByRole('button', { name: 'Create', exact: true }).click();
+  await page.getByRole('button', { name: /^Script layout ---/ }).click();
+  await page.getByRole('button', { name: 'Page1', exact: true }).click();
+  await expect(page.getByLabel('Drawing canvas')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.locator('.editable-text')).toHaveCount(4);
+  const positions = await page.locator('.editable-text').evaluateAll(elements => elements.map(element => ({ left: parseFloat((element as HTMLElement).style.left), top: parseFloat((element as HTMLElement).style.top) })));
+  expect(positions[0].left).toBeLessThan(500);
+  expect(positions[1].left).toBeGreaterThan(500);
+  expect(positions[2].top).toBeGreaterThan(600);
+  expect(positions[3].top).toBeGreaterThan(600);
+  await expect(page.getByRole('img', { name: 'One', exact: true })).toBeVisible();
+});
+
 test('autosaves after idle and exposes the save state', async ({ page }) => {
   await create(page, 'Autosave check');
   await stroke(page, [[200, 400], [650, 400]]);

@@ -4,10 +4,10 @@ import { DatePipe } from '@angular/common';
 import { SwUpdate } from '@angular/service-worker';
 import { NativeEditor } from './native-editor';
 import { NativeStore } from './native-store';
-import { Direction, GUIDES, NativeDraft, NativePage, assetUrl, downloadNative, nativeImage, newNativeDraft, newNativePage, pageBitmap, pageGrid } from './native-model';
+import { Direction, GUIDES, NativeDraft, NativePage, NativeText, PAGE_HEIGHT, PAGE_WIDTH, assetUrl, downloadNative, nativeImage, newNativeDraft, newNativePage, pageBitmap, pageGrid, parseSimpleScript, textBitmap } from './native-model';
 import { zipImages } from './native-export';
 
-type Dialog = 'new' | 'rename' | 'delete-draft' | 'delete-page' | 'page-settings' | 'order' | 'export' | 'hand' | 'volume' | null;
+type Dialog = 'new' | 'new-script' | 'rename' | 'delete-draft' | 'delete-page' | 'page-settings' | 'order' | 'export' | 'hand' | 'volume' | null;
 interface AppRoute { app: 'manganame'; session: string; index: number; screen: 'home' | 'pages' | 'editor' | 'settings'; draftId?: string; pageId?: string }
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -43,6 +43,7 @@ export class App {
   readonly hand = signal(localStorage.getItem('manganame-hand') || 'right_handed');
   readonly volume = signal(localStorage.getItem('manganame-volume') || 'none');
   titleValue = ''; guideValue = ''; directionValue: Direction = 'rtl'; spreadValue = true;
+  scriptValue = '';
   private targetId = '';
   private toastTimer?: ReturnType<typeof setTimeout>;
   private dragId: string | null = null;
@@ -199,6 +200,61 @@ export class App {
     requestAnimationFrame(() => { if (target?.isConnected) target.focus(); });
   }
   newDraft(): void { this.titleValue = ''; this.openDialog('new'); }
+  openScriptDialog(): void { this.scriptValue = ''; this.openDialog('new-script'); }
+  scriptStats(): string {
+    const pages = parseSimpleScript(this.scriptValue), dialogues = pages.reduce((count, page) => count + page.length, 0);
+    return dialogues ? `${pages.length} page${pages.length === 1 ? '' : 's'} · ${dialogues} dialogue${dialogues === 1 ? '' : 's'}` : 'Add one or more lines beginning with -';
+  }
+  scriptHasDialogues(): boolean { return parseSimpleScript(this.scriptValue).some(page => page.length > 0); }
+  private wrapScriptText(value: string, size: number, maxWidth: number): string {
+    const ctx = document.createElement('canvas').getContext('2d')!;
+    ctx.font = `100 ${size}px "MangaName Noto Sans", sans-serif`;
+    const lines: string[] = [];
+    for (const paragraph of value.split('\n')) {
+      let line = '';
+      for (const word of paragraph.trim().split(/\s+/).filter(Boolean)) {
+        const candidate = line ? `${line} ${word}` : word;
+        if (!line || ctx.measureText(candidate).width <= maxWidth) { line = candidate; continue; }
+        lines.push(line); line = word;
+        while (ctx.measureText(line).width > maxWidth && [...line].length > 1) {
+          let cut = ''; for (const char of line) { if (ctx.measureText(cut + char).width > maxWidth) break; cut += char; }
+          if (!cut) break; lines.push(cut); line = line.slice([...cut].length);
+        }
+      }
+      if (line) lines.push(line);
+    }
+    return lines.join('\n') || value;
+  }
+  private scriptSlots(count: number): { x: number; y: number; width: number }[] {
+    const margin = 90;
+    if (count === 1) return [{ x: PAGE_WIDTH / 2, y: PAGE_HEIGHT / 2, width: PAGE_WIDTH - margin * 2 }];
+    if (count === 2) return [{ x: PAGE_WIDTH / 2, y: PAGE_HEIGHT * .28, width: PAGE_WIDTH - margin * 2 }, { x: PAGE_WIDTH / 2, y: PAGE_HEIGHT * .72, width: PAGE_WIDTH - margin * 2 }];
+    if (count === 3) return [{ x: PAGE_WIDTH * .27, y: PAGE_HEIGHT * .28, width: 360 }, { x: PAGE_WIDTH * .73, y: PAGE_HEIGHT * .28, width: 360 }, { x: PAGE_WIDTH / 2, y: PAGE_HEIGHT * .72, width: 460 }];
+    if (count === 4) return [{ x: PAGE_WIDTH * .27, y: PAGE_HEIGHT * .28, width: 360 }, { x: PAGE_WIDTH * .73, y: PAGE_HEIGHT * .28, width: 360 }, { x: PAGE_WIDTH * .27, y: PAGE_HEIGHT * .72, width: 360 }, { x: PAGE_WIDTH * .73, y: PAGE_HEIGHT * .72, width: 360 }];
+    const columns = Math.max(2, Math.ceil(Math.sqrt(count * PAGE_WIDTH / PAGE_HEIGHT))), rows = Math.ceil(count / columns);
+    const width = (PAGE_WIDTH - margin * (columns + 1)) / columns;
+    return Array.from({ length: count }, (_, i) => ({ x: margin + width / 2 + (i % columns) * (width + margin), y: (PAGE_HEIGHT / rows) * ((i / columns | 0) + .5), width: width - 24 }));
+  }
+  private scriptPage(dialogues: string[]): NativePage {
+    const page = newNativePage(), size = dialogues.length > 4 ? 26 : dialogues.length > 1 ? 30 : 34;
+    page.texts = dialogues.map((dialogue, index) => {
+      const slot = this.scriptSlots(dialogues.length)[index];
+      const text: NativeText = { id: crypto.randomUUID(), text: this.wrapScriptText(dialogue, size, slot.width), size, vertical: false, x: 0, y: 0 };
+      const bitmap = textBitmap(text);
+      text.x = Math.max(24, Math.min(PAGE_WIDTH - bitmap.width - 24, slot.x - bitmap.width / 2));
+      text.y = Math.max(24, Math.min(PAGE_HEIGHT - bitmap.height - 24, slot.y - bitmap.height / 2));
+      return text;
+    });
+    return page;
+  }
+  private async draftFromScript(): Promise<NativeDraft> {
+    const parsed = parseSimpleScript(this.scriptValue);
+    if (!parsed.some(page => page.length)) throw new Error('Add at least one dialogue beginning with -');
+    await document.fonts.load('100 16px "MangaName Noto Sans"');
+    const draft = newNativeDraft(this.titleValue), pages = parsed.map(dialogues => this.scriptPage(dialogues));
+    for (const page of pages) page.thumbnail = (await pageBitmap(page, 212)).toDataURL();
+    return { ...draft, pages, updatedAt: Date.now() };
+  }
   openMenu(e: MouseEvent, kind: 'draft' | 'page', id: string): void {
     e.stopPropagation(); const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     this.menu.set({ kind, id, x: Math.max(8, Math.min(r.right - 184, innerWidth - 192)), y: Math.max(8, Math.min(r.top, innerHeight - 110)) });
@@ -211,6 +267,7 @@ export class App {
     try {
       const type = this.modal(), draft = this.draft();
       if (type === 'new') await this.store.save(newNativeDraft(this.titleValue));
+      if (type === 'new-script') { await this.store.save(await this.draftFromScript()); this.scriptValue = ''; }
       if (type === 'rename') {
         const target = this.store.drafts().find(d => d.id === this.targetId)!;
         await this.store.save({ ...target, title: this.titleValue.trim() || 'No Title', updatedAt: Date.now() });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newNativeDraft, newNativePage, pageGrid, sampleDraft } from './native-model';
+import { newNativeDraft, newNativePage, pageGrid, parseSimpleScript, sampleDraft } from './native-model';
 import { zipImages } from './native-export';
 
 describe('Original page progression', () => {
@@ -46,5 +46,16 @@ describe('Offline image bundle', () => {
     expect(view.getUint32(directory + 16, true)).toBe(0xcbf43926);
     expect(view.getUint32(directory + 42, true)).toBe(0);
     expect(view.getUint32(directory + 55 + 42, true)).toBe(48);
+  });
+});
+
+describe('Simple storyboard scripts', () => {
+  it('splits dialogue blocks into pages and discards formatting markers', () => {
+    expect(parseSimpleScript('- Salut\n- Ça va ?\n\n---\n\n- Non, j\'ai mangé mon père')).toEqual([
+      ['Salut', 'Ça va ?'], ['Non, j\'ai mangé mon père'],
+    ]);
+  });
+  it('accepts compact bullets and ignores trailing separators', () => {
+    expect(parseSimpleScript('-Un\n---\n- Deux\n---')).toEqual([['Un'], ['Deux']]);
   });
 });

@@ -52,6 +52,17 @@ async function save(page: Page) {
   await expect(page.getByRole('status')).toHaveText('Saved');
 }
 
+test('settings stays in the top toolbar after removing the navigation drawer', async ({ page }) => {
+  await boot(page);
+  await expect(page.getByRole('button', { name: 'Open navigation drawer', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.locator('.toolbar-title')).toContainText('Settings');
+  await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Add', exact: true })).toBeVisible();
+});
+
 test('manual save, undo/redo, erasing, discard and persistence', async ({ page }) => {
   await create(page, 'Drawing check');
   await stroke(page, [[200, 400], [650, 400]]);

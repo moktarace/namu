@@ -4,7 +4,9 @@
   @for (page of editorPages(); track page.id) { <native-editor [page]="page" [title]="draft()!.title" [pageNumber]="editorIndex() + 1" [pageCount]="draft()!.pages.length" [guide]="draft()!.guide" [leftHanded]="hand() === 'left_handed'" [volumeControl]="volume()" (pageSave)="savePage($event)" (navigate)="navigateEditor($event)" (message)="notify($event)" /> }
 } @else {
   <header class="toolbar">
-    <button class="nav-button" [attr.aria-label]="screen() === 'home' ? 'Open navigation drawer' : 'Back'" (click)="screen() === 'home' ? drawer.set(true) : goBack()"><img [src]="image(screen() === 'home' ? 'ic_navigation_menu' : 'ic_navigation_back')" alt=""></button>
+    @if (screen() !== 'home') {
+      <button class="nav-button" aria-label="Back" (click)="goBack()"><img [src]="image('ic_navigation_back')" alt=""></button>
+    }
     <div class="toolbar-title"><span>{{ screen() === 'home' ? 'Draft List' : screen() === 'pages' ? draft()?.title : 'Settings' }}</span>@if (screen() === 'pages') { <small>---</small> }</div>
     @if (screen() === 'pages') {
       <button class="action-button" aria-label="Reorder" (click)="reorder()"><img [src]="image('ic_action_order')" alt=""></button>
@@ -12,6 +14,7 @@
     }
     @if (screen() !== 'settings') {
       <button class="action-button" aria-label="Refresh" (click)="refresh()"><img [src]="image('ic_action_refresh')" alt=""></button>
+      <button class="action-button" aria-label="Settings" (click)="settings()"><img [src]="image('ic_menu_settings')" alt=""></button>
       <button class="action-button" aria-label="Add" [disabled]="!store.ready() || saving()" (click)="screen() === 'home' ? newDraft() : addPage()"><img [src]="image('ic_action_content_add')" alt=""></button>
     }
   </header>
@@ -50,10 +53,6 @@
       <h2>The version of your application</h2><div class="preference">2.4</div>
     </main>
   }
-}
-@if (drawer()) {
-  <div class="drawer-scrim" (click)="drawer.set(false)"></div>
-  <aside class="drawer" aria-label="Navigation drawer"><header><img [src]="image('ic_home')" alt=""><span>MangaName</span></header><button class="selected" (click)="drawer.set(false); screen.set('home')"><img [src]="image('ic_menu_list')" alt="">Draft List</button><a href="https://medibangpaint.com/en/feedback/" target="_blank" rel="noopener noreferrer" (click)="drawer.set(false)"><img [src]="image('ic_menu_contact_form')" alt="">Feedback</a><a href="https://play.google.com/store/apps/details?id=com.medibang.android.name" target="_blank" rel="noopener noreferrer" (click)="drawer.set(false)"><img [src]="image('ic_menu_review')" alt="">Rate app</a><button (click)="settings()"><img [src]="image('ic_menu_settings')" alt="">Settings</button><a href="https://medibangpaint.com/en/manganame/use/" target="_blank" rel="noopener noreferrer" (click)="drawer.set(false)"><img [src]="image('ic_menu_how_to')" alt="">How to use</a></aside>
 }
 @if (menu(); as menu) {
   <div class="menu-scrim" (click)="this.menu.set(null)"></div><div role="menu" class="popup-menu" [style.left.px]="menu.x" [style.top.px]="menu.y">

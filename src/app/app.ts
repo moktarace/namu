@@ -16,7 +16,6 @@ export class App {
   readonly asset = assetUrl;
   readonly guides = GUIDES;
   readonly screen = signal<'home' | 'pages' | 'editor' | 'settings'>('home');
-  readonly drawer = signal(false);
   readonly walkthrough = signal(localStorage.getItem('manganame-walkthrough') !== 'seen');
   readonly selectedId = signal<string | null>(null);
   readonly draft = computed(() => this.store.drafts().find(d => d.id === this.selectedId()) || null);
@@ -63,7 +62,7 @@ export class App {
     if (page && draft && route.screen === 'editor') {
       this.editorIndex.set(draft.pages.indexOf(page)); this.editorPages.set([structuredClone(page)]);
     } else this.editorPages.set([]);
-    this.screen.set(route.screen); this.drawer.set(false); this.menu.set(null);
+    this.screen.set(route.screen); this.menu.set(null);
   }
   private go(screen: AppRoute['screen'], draftId?: string, pageId?: string): void {
     const replace = screen === 'editor' && this.screen() === 'editor';
@@ -80,10 +79,10 @@ export class App {
     const target = event.state as AppRoute | null;
     if (target?.app !== 'manganame' || target.session !== this.route.session) return;
     const delta = this.route.index - target.index;
-    if (this.dialog.nativeElement.open || this.drawer() || this.menu()) {
+    if (this.dialog.nativeElement.open || this.menu()) {
       this.restoringHistory = true; history.go(delta);
       if (this.dialog.nativeElement.open) this.closeDialog();
-      this.drawer.set(false); this.menu.set(null); return;
+      this.menu.set(null); return;
     }
     if (this.screen() === 'editor' && !this.allowEditorLeave && this.editor) {
       if (this.editor.dialog.nativeElement.open || this.editor.busy() || this.editor.dirty()) {
@@ -105,7 +104,7 @@ export class App {
   @HostListener('window:resize') resize(): void { this.columns.set(this.getColumns()); this.pageWidth.set(this.getPageWidth()); this.menu.set(null); }
   @HostListener('window:keydown', ['$event']) key(e: KeyboardEvent): void {
     if (e.key !== 'Escape' || this.screen() === 'editor' || this.dialog.nativeElement.open) return;
-    if (this.menu()) this.menu.set(null); else if (this.drawer()) this.drawer.set(false); else if (this.screen() !== 'home') this.goBack();
+    if (this.menu()) this.menu.set(null); else if (this.screen() !== 'home') this.goBack();
   }
   notify(message: string): void { clearTimeout(this.toastTimer); this.toast.set(message); this.toastTimer = setTimeout(() => this.toast.set(''), 3200); }
   openDraft(d: NativeDraft): void { this.go('pages', d.id); }
@@ -221,6 +220,6 @@ export class App {
   }
   setHand(value: string): void { this.hand.set(value); localStorage.setItem('manganame-hand', value); this.closeDialog(); }
   setVolume(value: string): void { this.volume.set(value); localStorage.setItem('manganame-volume', value); this.closeDialog(); }
-  settings(): void { this.drawer.set(false); this.go('settings'); }
+  settings(): void { this.go('settings'); }
   async refresh(): Promise<void> { this.menu.set(null); try { await this.store.reload(); } catch { this.notify('Failed'); } }
 }

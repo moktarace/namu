@@ -11,8 +11,25 @@
           "/manifest.webmanifest",
           "/*.css",
           "/*.js",
-          "/native/**",
+          "/native/ic_*.png",
+          "/native/icon*",
+          "/native/no_items.png",
+          "/native/sample*.png",
+          "/native/*_light.png",
+          "/native/crop_mark_only*.png",
+          "/native/vertical_four*.png",
+          "/native/walkthrough_*.png",
           "/fonts/**"
+        ]
+      }
+    },
+    {
+      "name": "media",
+      "installMode": "lazy",
+      "updateMode": "lazy",
+      "resources": {
+        "files": [
+          "/native/stamp_*.png"
         ]
       }
     }

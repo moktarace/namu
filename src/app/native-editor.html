@@ -1,6 +1,7 @@
 <header class="toolbar" [class.hidden]="fullScreen()">
   <button class="nav-button" aria-label="Back" (click)="requestNavigation(-1)"><img [src]="image('ic_navigation_back')" alt=""></button>
   <div class="toolbar-title"><span>{{ title }}</span><small>{{ pageNumber }} / {{ pageCount }}</small></div>
+  <span class="save-state" [class.saving]="saving()" [class.pending]="autoSavePending()" aria-live="polite">{{ saveLabel() }}</span>
   <button class="action-button" aria-label="Previous Page" [disabled]="pageNumber === 1 || busy()" (click)="requestNavigation(pageNumber - 2)"><img [src]="image('ic_action_previous_' + (pageNumber === 1 ? 'disabled' : 'enabled'))" alt=""></button>
   <button class="action-button" aria-label="Next Page" [disabled]="busy()" (click)="requestNavigation(pageNumber)"><img [src]="image('ic_action_next_enabled')" alt=""></button>
   <button class="action-button" aria-label="Save" [disabled]="!dirty() || busy()" (click)="save()"><img [src]="image('ic_action_save_on_device_' + (dirty() ? 'enabled' : 'disabled'))" alt=""></button>
@@ -11,7 +12,7 @@
     <canvas #paint width="1000" height="1414" aria-label="Drawing canvas" [attr.aria-busy]="busy()"></canvas>
     @for (text of texts(); track text.id) {
       <div class="editable-text" [class.selected]="selectedText() === text.id" [style.--inverse-scale]="1 / view().scale" [style.left.px]="text.x - 50" [style.top.px]="text.y - 50" (pointerdown)="objectDown($event, 'move', text)" (pointermove)="objectMove($event)" (pointerup)="objectUp($event)" (pointercancel)="objectUp($event)">
-        <img [src]="textSource(text)" [alt]="text.text" draggable="false">
+        <img [src]="textSource(text)" [alt]="text.text" draggable="false" decoding="async">
         @if (selectedText() === text.id) { <button class="delete-text" aria-label="Delete text" [style.transform]="'scale(' + 1 / view().scale + ')'" (pointerdown)="$event.stopPropagation()" (click)="deleteText(text.id)"><img [src]="image('ic_action_delete_text')" alt=""></button> }
       </div>
     }
@@ -43,7 +44,7 @@
     <div class="stamp-panel">
       <button class="stamp-toggle" aria-label="Toggle stamps" (click)="stampOpen.set(!stampOpen())"><img [src]="image('ic_action_navigation_expand_' + (stampOpen() ? 'more' : 'less'))" alt=""></button>
       @if (stampOpen()) {
-        <div class="stamp-list">@for (stamp of stamps(); track stamp) { <button [attr.aria-label]="stamp" (click)="insertStamp(stamp)"><img [src]="image(stamp)" alt="" loading="lazy"></button> }</div>
+        <div class="stamp-list">@for (stamp of stamps(); track stamp) { <button [attr.aria-label]="stamp" (click)="insertStamp(stamp)"><img [src]="image(stamp)" alt="" loading="lazy" decoding="async"></button> }</div>
         <div class="stamp-tabs"><button [class.selected]="stampTab() === 'mark'" (click)="stampTab.set('mark')">Manga Mark</button><button [class.selected]="stampTab() === 'face'" (click)="stampTab.set('face')">Face</button></div>
       }
     </div>

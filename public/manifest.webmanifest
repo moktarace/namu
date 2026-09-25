@@ -1,6 +1,7 @@
 {
   "name": "MangaName",
   "short_name": "MangaName",
+  "description": "Create manga drafts on your device, offline and without advertising or synchronization.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
@@ -8,10 +9,18 @@
   "background_color": "#414141",
   "theme_color": "#313131",
   "orientation": "any",
+  "categories": ["productivity", "graphics", "design"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "native/icon.png",
       "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "native/icon-512.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },

@@ -22,7 +22,7 @@ npm run build
 npm run preview
 ```
 
-Ouvrir **http://localhost:4388/**. Laisser le premier chargement se terminer pour que le service worker mette les images et les polices locales en cache. Le serveur d’aperçu écoute uniquement sur la machine locale. Le site n’est pas publié.
+Ouvrir **http://localhost:4388/**. Laisser le premier chargement se terminer pour que le service worker mette le shell, les polices et les icônes locales en cache. Les tampons sont chargés et mis en cache à la demande afin d’alléger le premier démarrage. Le serveur d’aperçu écoute uniquement sur la machine locale. Le site n’est pas publié.
 
 Le script de compilation désactive le cache Angular et limite ses workers pour éviter le plantage du compilateur constaté dans cet environnement.
 
@@ -34,7 +34,8 @@ Le script de compilation désactive le cache Angular et limite ses workers pour 
 - Barre flottante déplaçable et orientable, plein écran, annuler/rétablir, zoom/déplacement/rotation à deux doigts.
 - Texte local rééditable, déplaçable et supprimable ; choix de la taille et du sens vertical.
 - Tampons : miroir, déplacement, taille et rotation. Sélection au lasso : découpe, déplacement, miroir et déformation.
-- Sauvegarde **manuelle**. Quitter un dessin modifié affiche la confirmation d’origine.
+- Autosauvegarde après 3,5 secondes d’inactivité, avec état visible « Autosave pending », « Saving… » ou « Saved » ; le bouton Save reste disponible pour enregistrer immédiatement. Quitter un dessin encore modifié affiche la confirmation d’origine.
+- Installation PWA depuis les navigateurs compatibles et bannière lorsqu’une nouvelle version est disponible.
 - Export PNG ; plusieurs images sont regroupées dans une archive ZIP. Le partage utilise la fonction du navigateur lorsqu’elle existe.
 
 Le rendu de texte distant a été remplacé par un rendu Canvas local en Noto Sans. Il n’effectue aucune requête MediBang. L’interface utilise les fichiers Roboto extraits du système Android 12 de référence. Les licences des polices sont incluses dans `public/fonts/`.
@@ -63,4 +64,4 @@ Les captures de référence PWA sont recréées par ces tests. Les traces d’é
 
 La reproduction de chaque écran au pixel près n’est pas encore certifiée. Le rendu de texte Canvas, les menus système, le clavier, la reconnaissance vocale et le partage dépendent du navigateur ; leur rendu ou disponibilité peut différer d’Android. Les touches de volume ne peuvent être traitées que si le navigateur transmet les événements correspondants. L’application ne lit pas les fichiers Realm de l’APK.
 
-Les liens externes du menu d’origine restent des liens explicites. Aucune publicité, connexion de compte, synchronisation, télémétrie ou bibliothèque MediBang n’est intégrée à la PWA.
+Aucun lien de synchronisation, connexion de compte, publicité, télémétrie ou bibliothèque MediBang n’est intégré à la PWA.

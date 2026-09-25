@@ -1,6 +1,7 @@
 import { Component, ElementRef, HostListener, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
+import { SwUpdate } from '@angular/service-worker';
 import { NativeEditor } from './native-editor';
 import { NativeStore } from './native-store';
 import { Direction, GUIDES, NativeDraft, NativePage, assetUrl, downloadNative, nativeImage, newNativeDraft, newNativePage, pageBitmap, pageGrid } from './native-model';
@@ -8,10 +9,15 @@ import { zipImages } from './native-export';
 
 type Dialog = 'new' | 'rename' | 'delete-draft' | 'delete-page' | 'page-settings' | 'order' | 'export' | 'hand' | 'volume' | null;
 interface AppRoute { app: 'manganame'; session: string; index: number; screen: 'home' | 'pages' | 'editor' | 'settings'; draftId?: string; pageId?: string }
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
 @Component({ selector: 'app-root', imports: [FormsModule, DatePipe, NativeEditor], templateUrl: './app.html', styleUrl: './app.scss', host: { '[style.--physical-pixel.px]': 'physicalPixel' } })
 export class App {
   readonly physicalPixel = 1 / (window.devicePixelRatio || 1);
   readonly store = inject(NativeStore);
+  readonly swUpdate = inject(SwUpdate);
   readonly image = nativeImage;
   readonly asset = assetUrl;
   readonly guides = GUIDES;
@@ -32,6 +38,8 @@ export class App {
   readonly exporting = signal(false);
   readonly toast = signal('');
   readonly saving = signal(false);
+  readonly installAvailable = signal(false);
+  readonly updateAvailable = signal(false);
   readonly hand = signal(localStorage.getItem('manganame-hand') || 'right_handed');
   readonly volume = signal(localStorage.getItem('manganame-volume') || 'none');
   titleValue = ''; guideValue = ''; directionValue: Direction = 'rtl'; spreadValue = true;
@@ -41,9 +49,15 @@ export class App {
   private route: AppRoute = { app: 'manganame', session: crypto.randomUUID(), index: 0, screen: 'home' };
   private restoringHistory = false;
   private allowEditorLeave = false;
+  private installPrompt?: BeforeInstallPromptEvent;
   @ViewChild('mainDialog', { static: true }) dialog!: ElementRef<HTMLDialogElement>;
   @ViewChild(NativeEditor) editor?: NativeEditor;
   constructor() {
+    if (this.swUpdate.isEnabled) {
+      this.swUpdate.versionUpdates.subscribe(event => {
+        if (event.type === 'VERSION_READY') this.updateAvailable.set(true);
+      });
+    }
     void this.store.init().then(() => {
       const saved = history.state as AppRoute | null;
       if (saved?.app === 'manganame') this.applyRoute(saved);
@@ -95,6 +109,20 @@ export class App {
     this.allowEditorLeave = false; this.applyRoute(target);
   }
   finishWalkthrough(): void { localStorage.setItem('manganame-walkthrough', 'seen'); this.walkthrough.set(false); }
+  @HostListener('window:beforeinstallprompt', ['$event']) captureInstallPrompt(event: Event): void {
+    event.preventDefault(); this.installPrompt = event as BeforeInstallPromptEvent; this.installAvailable.set(true);
+  }
+  async installPwa(): Promise<void> {
+    const prompt = this.installPrompt; if (!prompt) return;
+    this.installPrompt = undefined; this.installAvailable.set(false);
+    try { await prompt.prompt(); await prompt.userChoice; }
+    catch { this.notify('Installation unavailable'); }
+  }
+  async applyUpdate(): Promise<void> {
+    if (!this.swUpdate.isEnabled) return;
+    try { await this.swUpdate.activateUpdate(); window.location.reload(); }
+    catch { this.notify('Update failed'); }
+  }
   private getColumns(): number { return window.innerWidth >= 820 || window.innerWidth > window.innerHeight ? 4 : 2; }
   private getPageWidth(): number {
     const columns = this.getColumns(), density = window.devicePixelRatio || 1;

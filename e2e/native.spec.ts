@@ -63,6 +63,26 @@ test('settings stays in the top toolbar after removing the navigation drawer', a
   await expect(page.getByRole('button', { name: 'Add', exact: true })).toBeVisible();
 });
 
+test('autosaves after idle and exposes the save state', async ({ page }) => {
+  await create(page, 'Autosave check');
+  await stroke(page, [[200, 400], [650, 400]]);
+  await expect(page.locator('.save-state')).toHaveText('Autosave pending');
+  await expect(page.locator('.save-state')).toHaveText('Saved', { timeout: 8000 });
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Page1', exact: true })).toBeVisible();
+});
+
+test('PWA metadata separates the install shell from lazy media', async ({ page }) => {
+  const manifest = await (await page.request.get('/manifest.webmanifest')).json();
+  expect(manifest.icons).toEqual(expect.arrayContaining([expect.objectContaining({ sizes: '512x512', src: 'native/icon-512.png' })]));
+  expect(manifest.categories).toEqual(expect.arrayContaining(['graphics', 'productivity']));
+  const ngsw = await (await page.request.get('/ngsw.json')).json();
+  expect(ngsw.assetGroups).toEqual(expect.arrayContaining([
+    expect.objectContaining({ name: 'manganame', installMode: 'prefetch' }),
+    expect.objectContaining({ name: 'media', installMode: 'lazy', updateMode: 'lazy' }),
+  ]));
+});
+
 test('manual save, undo/redo, erasing, discard and persistence', async ({ page }) => {
   await create(page, 'Drawing check');
   await stroke(page, [[200, 400], [650, 400]]);
@@ -382,7 +402,9 @@ test('installed cache reloads and renders local text entirely offline', async ({
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
   // Activation precedes completion of Angular's asset prefetch.
   const manifest = await (await page.request.get(origin + '/ngsw.json')).json();
-  const assets: string[] = manifest.assetGroups.flatMap((group: { urls: string[] }) => group.urls);
+  const assets: string[] = manifest.assetGroups
+    .filter((group: { installMode: string }) => group.installMode === 'prefetch')
+    .flatMap((group: { urls: string[] }) => group.urls);
   await expect.poll(() => page.evaluate(async urls => (await Promise.all(urls.map(url => caches.match(url)))).every(Boolean), assets), { timeout: 20000 }).toBe(true);
   // A controlled request also waits for Angular to finish initializing its
   // version table, after writing the individual prefetched cache responses.

@@ -46,6 +46,9 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
   readonly property = computed(() => this.properties()[this.tool()] || { size: 2, color: '#000000' });
   readonly dirty = signal(false);
   readonly busy = signal(true);
+  readonly saving = signal(false);
+  readonly autoSavePending = signal(false);
+  readonly saveLabel = computed(() => this.saving() ? 'Saving…' : this.dirty() ? (this.autoSavePending() ? 'Autosave pending' : 'Unsaved changes') : 'Saved');
   readonly undoCount = signal(0);
   readonly redoCount = signal(0);
   readonly texts = signal<NativeText[]>([]);
@@ -79,6 +82,7 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
   private textImages = new Map<string, { src: string; width: number; height: number }>();
   private destroyed = false;
   private speechAbort?: () => void;
+  private autoSaveTimer?: ReturnType<typeof setTimeout>;
   private requestRevision = 0;
   private captureDown = (e: PointerEvent): void => {
     if (this.busy() || e.button !== 0 || (e.target as HTMLElement).closest('button,.floating-bar,.stamp-panel')) return;
@@ -123,6 +127,7 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
       if (this.page.bitmap) this.ctx.drawImage(await loadImage(this.page.bitmap), 0, 0, PAGE_WIDTH, PAGE_HEIGHT);
       this.texts.set(structuredClone(this.page.texts));
       this.frames = [this.frame()]; this.savedKey = JSON.stringify(this.frames[0]);
+      this.saving.set(false); this.autoSavePending.set(false);
       this.fit();
       if (this.leftHanded) this.bar.set({ x: Math.max(0, this.stage.nativeElement.clientWidth - this.floating.nativeElement.offsetWidth), y: 1 / this.density });
       let stageWidth = stage.clientWidth;
@@ -137,7 +142,7 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
     this.busy.set(false);
   }
   ngOnDestroy(): void {
-    this.destroyed = true; this.resizeObserver?.disconnect(); this.speechAbort?.();
+    this.destroyed = true; this.cancelAutoSave(); this.resizeObserver?.disconnect(); this.speechAbort?.();
     const stage = this.stage.nativeElement;
     stage.removeEventListener('pointerdown', this.captureDown, true);
     stage.removeEventListener('pointermove', this.captureMove, true);
@@ -320,7 +325,7 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
       this.ctx.drawImage(img, -selection.width / 2, -selection.height / 2, selection.width, selection.height); this.ctx.restore();
       this.selection.set(null); this.record();
     } catch { this.message.emit('Failed'); }
-    finally { this.busy.set(false); }
+    finally { this.busy.set(false); if (this.dirty() && !this.selection()) this.scheduleAutoSave(); }
   }
   flipSelection(): void { this.selection.update(s => s ? { ...s, flip: !s.flip } : null); }
   objectDown(e: PointerEvent, mode: string, text?: NativeText): void {
@@ -428,7 +433,10 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
   }
   private updateHistory(): void {
     this.undoCount.set(this.cursor); this.redoCount.set(this.frames.length - this.cursor - 1);
-    this.dirty.set(JSON.stringify(this.frames[this.cursor]) !== this.savedKey);
+    const dirty = JSON.stringify(this.frames[this.cursor]) !== this.savedKey;
+    this.dirty.set(dirty);
+    if (!dirty) this.cancelAutoSave();
+    else if (!this.busy() && !this.selection()) this.scheduleAutoSave();
   }
   private async restore(): Promise<void> {
     this.busy.set(true); const revision = ++this.requestRevision;
@@ -438,7 +446,7 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
       if (this.destroyed || revision !== this.requestRevision) return;
       this.ctx.clearRect(0, 0, PAGE_WIDTH, PAGE_HEIGHT); this.ctx.drawImage(img, 0, 0);
       this.texts.set(structuredClone(frame.texts)); this.selectedText.set(null); this.updateHistory();
-    } finally { this.busy.set(false); }
+    } finally { this.busy.set(false); if (this.dirty() && !this.selection()) this.scheduleAutoSave(); }
   }
   async undo(): Promise<void> {
     if (this.busy()) return;
@@ -447,16 +455,42 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
   }
   async redo(): Promise<void> { if (!this.busy() && this.cursor < this.frames.length - 1) { this.cursor++; await this.restore(); } }
   clearAll(): void { this.ctx.clearRect(0, 0, PAGE_WIDTH, PAGE_HEIGHT); this.selection.set(null); this.record(); this.closeDialog(); }
-  async save(): Promise<void> {
+  private cancelAutoSave(): void {
+    if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
+    this.autoSaveTimer = undefined; this.autoSavePending.set(false);
+  }
+  private scheduleAutoSave(): void {
+    if (!this.dirty() || this.busy() || this.selection()) return;
+    if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
+    this.autoSavePending.set(true);
+    this.autoSaveTimer = setTimeout(() => {
+      this.autoSaveTimer = undefined;
+      this.autoSavePending.set(false);
+      void this.autoSave();
+    }, 3500);
+  }
+  private async autoSave(): Promise<void> {
+    if (this.destroyed || !this.dirty() || this.busy() || this.selection()) return;
+    await this.persist();
+  }
+  private async persist(): Promise<void> {
     if (this.busy()) return;
-    await this.commitSelection(); this.selectedText.set(null); this.busy.set(true);
+    this.cancelAutoSave();
+    this.busy.set(true); this.saving.set(true);
     try {
       const output: NativePage = { ...this.page, bitmap: this.paint.nativeElement.toDataURL(), texts: structuredClone(this.texts()), thumbnail: '' };
       output.thumbnail = (await pageBitmap(output, 212)).toDataURL();
       this.pageSave.emit(output);
-    } catch { this.message.emit('Saving failed'); this.busy.set(false); }
+    } catch { this.message.emit('Saving failed'); this.saving.set(false); this.busy.set(false); }
+  }
+  async save(): Promise<void> {
+    if (this.busy()) return;
+    this.cancelAutoSave();
+    await this.commitSelection(); this.selectedText.set(null);
+    await this.persist();
   }
   markSaved(success = true): void {
+    this.saving.set(false);
     if (success) { this.savedKey = JSON.stringify(this.frame()); this.updateHistory(); }
     this.busy.set(false);
   }

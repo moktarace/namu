@@ -39,6 +39,7 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
   dp(value: number): number { return Math.round(value * this.density) / this.density; }
   readonly tools: NativeTool[] = ['pen', 'eraser', 'line', 'rect', 'text', 'stamp', 'lasso'];
   readonly labels = { pen: 'Pen', eraser: 'Eraser', line: 'Line', rect: 'Rectangle', text: 'Text', stamp: 'Stamp', lasso: 'Lasso' };
+  readonly toolShortcuts: Record<NativeTool, string> = { pen: 'B', eraser: 'E', line: 'L', rect: 'R', text: 'T', stamp: 'S', lasso: 'Q' };
   readonly colors = ['#000000', '#7dbeff', '#f44336', '#4caf50', '#d1d1d1'];
   readonly tool = signal<NativeTool>('pen');
   readonly widths = computed(() => this.tool() === 'eraser' ? [8, 30, 200] : [2, 4, 6, 8, 12, 30]);
@@ -83,6 +84,7 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
   private destroyed = false;
   private speechAbort?: () => void;
   private autoSaveTimer?: ReturnType<typeof setTimeout>;
+  private dialogReturnFocus?: HTMLElement;
   private requestRevision = 0;
   private captureDown = (e: PointerEvent): void => {
     if (this.busy() || e.button !== 0 || (e.target as HTMLElement).closest('button,.floating-bar,.stamp-panel')) return;
@@ -500,13 +502,43 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
     else this.navigate.emit(index);
   }
   discardAndLeave(): void { this.closeDialog(); this.navigate.emit(this.pendingNavigation); }
-  openDialog(type: 'tool' | 'text' | 'clear' | 'leave'): void { this.dialogType.set(type); if (!this.dialog.nativeElement.open) this.dialog.nativeElement.showModal(); }
+  openDialog(type: 'tool' | 'text' | 'clear' | 'leave'): void {
+    const wasOpen = this.dialog.nativeElement.open;
+    if (!wasOpen) {
+      const active = document.activeElement;
+      this.dialogReturnFocus = active instanceof HTMLElement ? active : undefined;
+      this.dialog.nativeElement.showModal();
+    }
+    this.dialogType.set(type);
+    this.focusDialogControl();
+  }
   closeDialog(): void {
-    if (this.dialogType() === 'clear') { this.dialogType.set('tool'); return; }
+    if (this.dialogType() === 'clear') { this.dialogType.set('tool'); this.focusDialogControl(); return; }
+    const wasOpen = this.dialog.nativeElement.open;
     this.dialog.nativeElement.close(); this.dialogType.set(null);
+    if (wasOpen) this.restoreDialogFocus();
   }
   cancelDialog(event: Event): void { event.preventDefault(); this.closeDialog(); }
   dialogBackdrop(e: MouseEvent): void { if (e.target === this.dialog.nativeElement) this.closeDialog(); }
+  dialogKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Tab') return;
+    const controls = [...this.dialog.nativeElement.querySelectorAll<HTMLElement>('input:not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])')];
+    if (!controls.length) return;
+    const first = controls[0], last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  }
+  private focusDialogControl(): void {
+    requestAnimationFrame(() => {
+      const first = this.dialog.nativeElement.querySelector<HTMLElement>('input:not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])');
+      first?.focus();
+    });
+  }
+  private restoreDialogFocus(): void {
+    const target = this.dialogReturnFocus;
+    this.dialogReturnFocus = undefined;
+    requestAnimationFrame(() => { if (target?.isConnected) target.focus(); });
+  }
   wheel(e: WheelEvent): void {
     e.preventDefault(); const v = this.view(), p = this.toPage(e.clientX, e.clientY), r = this.stage.nativeElement.getBoundingClientRect();
     const scale = Math.max(0.08, Math.min(8, v.scale * Math.exp(-e.deltaY * 0.002)));
@@ -516,6 +548,11 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
   @HostListener('window:beforeunload', ['$event']) beforeUnload(e: BeforeUnloadEvent): void { if (this.dirty()) { e.preventDefault(); e.returnValue = ''; } }
   @HostListener('window:keydown', ['$event']) keydown(e: KeyboardEvent): void {
     if (this.dialog.nativeElement.open || (e.target as HTMLElement).matches('input,textarea,select')) return;
+    if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+      const shortcuts: Record<string, NativeTool> = { b: 'pen', e: 'eraser', l: 'line', r: 'rect', t: 'text', s: 'stamp', q: 'lasso' };
+      const nextTool = shortcuts[e.key.toLowerCase()];
+      if (nextTool) { e.preventDefault(); this.chooseTool(nextTool); return; }
+    }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); void this.save(); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); void (e.shiftKey ? this.redo() : this.undo()); }
     if (e.key === 'Escape') { if (this.selection()) void this.undo(); else this.requestNavigation(-1); }

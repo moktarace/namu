@@ -50,6 +50,7 @@ export class App {
   private restoringHistory = false;
   private allowEditorLeave = false;
   private installPrompt?: BeforeInstallPromptEvent;
+  private dialogReturnFocus?: HTMLElement;
   @ViewChild('mainDialog', { static: true }) dialog!: ElementRef<HTMLDialogElement>;
   @ViewChild(NativeEditor) editor?: NativeEditor;
   constructor() {
@@ -156,9 +157,47 @@ export class App {
       this.editor?.markSaved(); this.notify('Saved');
     } catch { this.editor?.markSaved(false); this.notify('Saving failed'); }
   }
-  openDialog(type: Dialog): void { this.menu.set(null); this.modal.set(type); if (!this.dialog.nativeElement.open) this.dialog.nativeElement.showModal(); }
-  closeDialog(): void { if (this.saving() || this.exporting()) return; this.dialog.nativeElement.close(); this.modal.set(null); }
+  openDialog(type: Dialog): void {
+    this.menu.set(null);
+    const wasOpen = this.dialog.nativeElement.open;
+    if (!wasOpen) {
+      const active = document.activeElement;
+      this.dialogReturnFocus = active instanceof HTMLElement ? active : undefined;
+      this.dialog.nativeElement.showModal();
+    }
+    this.modal.set(type);
+    this.focusDialogControl();
+  }
+  closeDialog(): void {
+    if (this.saving() || this.exporting()) return;
+    const wasOpen = this.dialog.nativeElement.open;
+    this.dialog.nativeElement.close(); this.modal.set(null);
+    if (wasOpen) this.restoreDialogFocus();
+  }
   onBackdrop(e: MouseEvent): void { if (e.target === this.dialog.nativeElement) this.closeDialog(); }
+  cancelDialog(event: Event): void {
+    if (this.saving() || this.exporting()) { event.preventDefault(); return; }
+    event.preventDefault(); this.closeDialog();
+  }
+  dialogKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Tab') return;
+    const controls = [...this.dialog.nativeElement.querySelectorAll<HTMLElement>('input:not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])')];
+    if (!controls.length) return;
+    const first = controls[0], last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  }
+  private focusDialogControl(): void {
+    requestAnimationFrame(() => {
+      const first = this.dialog.nativeElement.querySelector<HTMLElement>('input:not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])');
+      first?.focus();
+    });
+  }
+  private restoreDialogFocus(): void {
+    const target = this.dialogReturnFocus;
+    this.dialogReturnFocus = undefined;
+    requestAnimationFrame(() => { if (target?.isConnected) target.focus(); });
+  }
   newDraft(): void { this.titleValue = ''; this.openDialog('new'); }
   openMenu(e: MouseEvent, kind: 'draft' | 'page', id: string): void {
     e.stopPropagation(); const r = (e.currentTarget as HTMLElement).getBoundingClientRect();

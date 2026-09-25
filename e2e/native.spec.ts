@@ -72,6 +72,33 @@ test('autosaves after idle and exposes the save state', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Page1', exact: true })).toBeVisible();
 });
 
+test('shows the active tool shortcuts and keeps dialog focus contained', async ({ page }) => {
+  await create(page, 'Accessibility check');
+  const activeTool = page.locator('.active-tool');
+  await expect(activeTool).toHaveText('Pen · B');
+  await page.keyboard.press('e');
+  await expect(activeTool).toHaveText('Eraser · E');
+
+  const tools = page.getByRole('button', { name: 'Tools', exact: true });
+  await tools.click();
+  await expect(page.getByRole('button', { name: 'Pen', exact: true })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.getByRole('button', { name: 'Clear all', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(tools).toBeFocused();
+
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  const add = page.getByRole('button', { name: 'Add', exact: true });
+  await add.click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('textbox', { name: 'Title', exact: true })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(dialog.getByRole('button', { name: 'Add', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(add).toBeFocused();
+});
+
 test('PWA metadata separates the install shell from lazy media', async ({ page }) => {
   const manifest = await (await page.request.get('/manifest.webmanifest')).json();
   expect(manifest.icons).toEqual(expect.arrayContaining([expect.objectContaining({ sizes: '512x512', src: 'native/icon-512.png' })]));

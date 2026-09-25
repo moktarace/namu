@@ -2,6 +2,7 @@
   <button class="nav-button" aria-label="Back" (click)="requestNavigation(-1)"><img [src]="image('ic_navigation_back')" alt=""></button>
   <div class="toolbar-title"><span>{{ title }}</span><small>{{ pageNumber }} / {{ pageCount }}</small></div>
   <span class="save-state" [class.saving]="saving()" [class.pending]="autoSavePending()" aria-live="polite">{{ saveLabel() }}</span>
+  <span class="active-tool" aria-live="polite">{{ labels[tool()] }} · {{ toolShortcuts[tool()] }}</span>
   <button class="action-button" aria-label="Previous Page" [disabled]="pageNumber === 1 || busy()" (click)="requestNavigation(pageNumber - 2)"><img [src]="image('ic_action_previous_' + (pageNumber === 1 ? 'disabled' : 'enabled'))" alt=""></button>
   <button class="action-button" aria-label="Next Page" [disabled]="busy()" (click)="requestNavigation(pageNumber)"><img [src]="image('ic_action_next_enabled')" alt=""></button>
   <button class="action-button" aria-label="Save" [disabled]="!dirty() || busy()" (click)="save()"><img [src]="image('ic_action_save_on_device_' + (dirty() ? 'enabled' : 'disabled'))" alt=""></button>
@@ -31,7 +32,7 @@
     }
   </div>
   <div #floating class="floating-bar" [class.horizontal]="!verticalBar()" [style.left.px]="bar().x" [style.top.px]="bar().y">
-    <div class="current-tool"><button aria-label="Tools" (click)="openTool()"><img [src]="image('ic_tool_' + tool())" alt=""></button>@if (['pen','line','rect'].includes(tool())) { <span class="color-indicator" [style.background]="property().color"></span> }</div>
+    <div class="current-tool"><button aria-label="Tools" [attr.title]="labels[tool()] + ' (' + toolShortcuts[tool()] + ')'" (click)="openTool()"><img [src]="image('ic_tool_' + tool())" alt=""></button>@if (['pen','line','rect'].includes(tool())) { <span class="color-indicator" [style.background]="property().color"></span> }</div>
     <i class="separator"></i>
     <button aria-label="Undo" [disabled]="(!undoCount() && !selection()) || busy()" (click)="undo()"><img [src]="image('ic_tool_undo_' + (undoCount() || selection() ? 'enabled' : 'disabled'))" alt=""></button>
     <button aria-label="Redo" [disabled]="!redoCount() || busy()" (click)="redo()"><img [src]="image('ic_tool_redo_' + (redoCount() ? 'enabled' : 'disabled'))" alt=""></button>
@@ -51,11 +52,11 @@
   }
   @if (busy()) { <div class="loading-overlay"><div class="spinner"></div></div> }
 </div>
-<dialog #editorDialog [class.tool-dialog]="dialogType() === 'tool'" (click)="dialogBackdrop($event)" (cancel)="cancelDialog($event)">
+<dialog #editorDialog [class.tool-dialog]="dialogType() === 'tool'" (click)="dialogBackdrop($event)" (keydown)="dialogKeydown($event)" (cancel)="cancelDialog($event)">
   @switch (dialogType()) {
     @case ('tool') {
       <div class="tool-content">
-        <div class="tool-row">@for (t of tools; track t) { <button [attr.aria-label]="labels[t]" [class.selected]="tool() === t" (click)="chooseTool(t)"><img [src]="image('ic_tool_' + t)" alt=""></button> }</div>
+        <div class="tool-row">@for (t of tools; track t) { <button [attr.aria-label]="labels[t]" [attr.title]="labels[t] + ' (' + toolShortcuts[t] + ')'" [attr.data-shortcut]="toolShortcuts[t]" [class.selected]="tool() === t" (click)="chooseTool(t)"><img [src]="image('ic_tool_' + t)" alt=""></button> }</div>
         <div class="tool-divider"></div>
         @if (['pen','eraser','line','rect'].includes(tool())) {
           <div class="widths" [class.eraser-widths]="tool() === 'eraser'">@for (width of widths(); track width; let i = $index) { <button [attr.aria-label]="'Width ' + width" [class.selected]="property().size === width" (click)="setProperty('size', width)"><img [src]="image('ic_tool_size')" alt="" [style.width.px]="tool() === 'eraser' ? [6,18,46][i] : [6,10,14,20,30,46][i]" [style.height.px]="tool() === 'eraser' ? [6,18,46][i] : [6,10,14,20,30,46][i]"></button> }</div>

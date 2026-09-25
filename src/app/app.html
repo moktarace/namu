@@ -63,7 +63,7 @@
     <button role="menuitem" (click)="confirmDelete(menu.kind, menu.id)">Delete</button>
   </div>
 }
-<dialog #mainDialog [class.export-dialog]="modal() === 'export'" [class.order-dialog]="modal() === 'order'" (click)="onBackdrop($event)" (cancel)="(saving() || exporting()) ? $event.preventDefault() : modal.set(null)">
+<dialog #mainDialog [class.export-dialog]="modal() === 'export'" [class.order-dialog]="modal() === 'order'" (click)="onBackdrop($event)" (keydown)="dialogKeydown($event)" (cancel)="cancelDialog($event)">
   @switch (modal()) {
     @case ('new') { <form (ngSubmit)="submitDialog()"><h2 class="dialog-title">Please enter some information for the draft</h2><div class="dialog-body"><label class="field">Title<input name="title" aria-label="Title" maxlength="128" [(ngModel)]="titleValue" autofocus></label><label class="field">Team<select aria-label="Team"><option>---</option></select></label></div><div class="dialog-buttons"><button type="button" (click)="closeDialog()">Cancel</button><button type="submit" [disabled]="saving()">Add</button></div></form> }
     @case ('rename') { <form (ngSubmit)="submitDialog()"><h2 class="dialog-title">Edit title</h2><div class="dialog-body"><input name="title" aria-label="Title" maxlength="128" [(ngModel)]="titleValue" autofocus></div><div class="dialog-buttons"><button type="button" (click)="closeDialog()">Cancel</button><button type="submit" [disabled]="saving()">Refresh</button></div></form> }

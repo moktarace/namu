@@ -2,6 +2,7 @@
 .save-state { flex:none; max-width:126px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:#9e9e9e; font-size:12px; line-height:16px; margin:0 4px; }
 .save-state.pending { color:#ffcc80; }
 .save-state.saving { color:#80cbc4; }
+.active-tool { flex:none; max-width:112px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:#80cbc4; font-size:11px; line-height:16px; margin:0 4px; }
 .stage { flex:1; min-height:0; overflow:hidden; position:relative; background:#414141; touch-action:none; user-select:none; }
 .paper { position:absolute; top:0; left:0; width:1000px; height:1414px; background:#fff; transform-origin:0 0; }
 canvas,.guide,.lasso { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
@@ -12,6 +13,8 @@ canvas,.guide,.lasso { position:absolute; inset:0; width:100%; height:100%; poin
 .floating-bar { display:flex; flex-direction:column; padding:4px; background:#313131; position:absolute; z-index:4; width:var(--bar-size); }
 .floating-bar.horizontal { flex-direction:row; width:auto; height:var(--bar-size); }
 .floating-bar button,.tool-row button,.colors button { width:40px; height:40px; padding:0; flex:none; }
+.tool-row button { position:relative; }
+.tool-row button::after { content:attr(data-shortcut); position:absolute; right:1px; bottom:1px; min-width:13px; height:13px; padding:0 2px; border-radius:2px; background:#313131dd; color:#fff; font-size:9px; line-height:13px; font-weight:700; }
 .floating-bar img,.tool-row img { width:40px; height:40px; }
 .current-tool { position:relative; width:var(--tool-container-size); height:var(--tool-container-size); flex:none; }
 .color-indicator { position:absolute; width:var(--indicator-size); height:var(--indicator-size); border-radius:50%; left:var(--indicator-offset); top:var(--indicator-offset); pointer-events:none; }

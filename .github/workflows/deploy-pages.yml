@@ -1,0 +1,54 @@
+name: Deploy MangaName PWA to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: manganame-pwa/package-lock.json
+      - name: Install dependencies
+        working-directory: manganame-pwa
+        run: npm ci
+      - name: Build for the repository path
+        working-directory: manganame-pwa
+        run: npm run build -- --base-href "/${{ github.event.repository.name }}/"
+      - name: Make font URLs relative to the Pages project
+        run: |
+          find manganame-pwa/dist/manganame-pwa/browser -name '*.css' -exec sed -i "s#url(/fonts/#url(/${{ github.event.repository.name }}/fonts/#g; s#url('/fonts/#url('/${{ github.event.repository.name }}/fonts/#g" {} +
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: manganame-pwa/dist/manganame-pwa/browser
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

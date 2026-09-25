@@ -1,0 +1,39 @@
+{
+  "name": "manganame-pwa",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "node scripts/build.mjs",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "preview": "node scripts/serve.mjs",
+    "test:e2e": "playwright test"
+  },
+  "private": true,
+  "packageManager": "npm@11.17.0",
+  "dependencies": {
+    "@angular/common": "21.2.11",
+    "@angular/compiler": "21.2.11",
+    "@angular/core": "21.2.11",
+    "@angular/forms": "21.2.11",
+    "@angular/platform-browser": "21.2.11",
+    "@angular/router": "21.2.11",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "@angular/service-worker": "21.2.11"
+  },
+  "devDependencies": {
+    "@angular/build": "21.2.9",
+    "@angular/cli": "21.2.9",
+    "@angular/compiler-cli": "21.2.11",
+    "jsdom": "^28.0.0",
+    "prettier": "^3.8.1",
+    "typescript": "~5.9.2",
+    "vitest": "^4.0.8",
+    "@playwright/test": "1.63.0"
+  },
+  "engines": {
+    "node": "^20.19.0 || ^22.12.0 || ^24.0.0"
+  }
+}

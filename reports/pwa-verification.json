@@ -1,0 +1,10 @@
+{
+  "project": "manganame-pwa",
+  "tests": {
+    "unit": "4/4",
+    "chromium_e2e": "12/12",
+    "webkit_targeted": "9/9"
+  },
+  "removed": ["MediBang synchronization", "advertising SDKs", "remote text rendering"],
+  "deployment": "GitHub Pages workflow included"
+}

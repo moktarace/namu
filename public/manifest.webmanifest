@@ -1,0 +1,25 @@
+{
+  "name": "MangaName",
+  "short_name": "MangaName",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#414141",
+  "theme_color": "#313131",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "native/icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "native/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

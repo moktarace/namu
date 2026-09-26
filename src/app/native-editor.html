@@ -9,7 +9,7 @@
 </header>
 <div #stage class="stage" (pointerdown)="pointerDown($event)" (pointermove)="pointerMove($event)" (pointerup)="pointerUp($event)" (pointercancel)="pointerUp($event)" (wheel)="wheel($event)">
   <div class="paper" [style.transform]="paperTransform()">
-    @if (guide) { <img class="guide" [src]="image(guide + '_light')" alt=""> }
+    @if (guide) { <img class="guide" [src]="image(guide)" alt=""> }
     <canvas #paint width="1000" height="1414" aria-label="Drawing canvas" [attr.aria-busy]="busy()"></canvas>
     @for (text of texts(); track text.id) {
       <div class="editable-text" [class.selected]="selectedText() === text.id" [style.--inverse-scale]="1 / view().scale" [style.left.px]="text.x - 50" [style.top.px]="text.y - 50" (pointerdown)="objectDown($event, 'move', text)" (pointermove)="objectMove($event)" (pointerup)="objectUp($event)" (pointercancel)="objectUp($event)">

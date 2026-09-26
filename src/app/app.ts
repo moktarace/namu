@@ -4,7 +4,7 @@ import { DatePipe } from '@angular/common';
 import { SwUpdate } from '@angular/service-worker';
 import { NativeEditor } from './native-editor';
 import { NativeStore } from './native-store';
-import { Direction, GUIDES, NativeDraft, NativePage, NativeText, PAGE_HEIGHT, PAGE_WIDTH, assetUrl, downloadNative, nativeImage, newNativeDraft, newNativePage, pageBitmap, pageGrid, parseSimpleScript, textBitmap } from './native-model';
+import { Direction, GUIDES, NativeDraft, NativePage, NativeText, PAGE_HEIGHT, PAGE_WIDTH, assetUrl, downloadNative, nativeImage, newNativeDraft, newNativePage, pageBitmap, pageGrid, parseSimpleScript, storyboardSpreads, textBitmap } from './native-model';
 import { zipImages } from './native-export';
 
 type Dialog = 'new' | 'new-script' | 'rename' | 'delete-draft' | 'delete-page' | 'page-settings' | 'order' | 'export' | 'hand' | 'volume' | null;
@@ -28,7 +28,14 @@ export class App {
   readonly columns = signal(this.getColumns());
   readonly pageWidth = signal(this.getPageWidth());
   readonly pageHeight = computed(() => Math.floor(this.pageWidth() / this.physicalPixel * 1.414) * this.physicalPixel);
+  readonly spreadPageWidth = signal(this.getSpreadPageWidth());
+  readonly spreadPageHeight = computed(() => Math.floor(this.spreadPageWidth() / this.physicalPixel * 1.414) * this.physicalPixel);
   readonly grid = computed(() => this.draft() ? pageGrid(this.draft()!, this.columns()) : []);
+  readonly spreads = computed(() => this.draft() ? storyboardSpreads(this.draft()!) : []);
+  readonly spreadView = computed(() => {
+    const draft = this.draft();
+    return !!draft && draft.direction !== 'ttb' && draft.spreadView === true;
+  });
   readonly editorPages = signal<NativePage[]>([]);
   readonly editorIndex = signal(0);
   readonly modal = signal<Dialog>(null);
@@ -42,7 +49,7 @@ export class App {
   readonly updateAvailable = signal(false);
   readonly hand = signal(localStorage.getItem('manganame-hand') || 'right_handed');
   readonly volume = signal(localStorage.getItem('manganame-volume') || 'none');
-  titleValue = ''; guideValue = ''; directionValue: Direction = 'rtl'; spreadValue = true;
+  titleValue = ''; guideValue = ''; directionValue: Direction = 'rtl'; spreadValue = true; spreadViewValue = true;
   scriptValue = '';
   private targetId = '';
   private toastTimer?: ReturnType<typeof setTimeout>;
@@ -131,7 +138,11 @@ export class App {
     // The native adapter uses integer physical pixels before applying 1.414.
     return Math.floor((Math.round(window.innerWidth * density) - (columns + 1) * 16) / columns) / density;
   }
-  @HostListener('window:resize') resize(): void { this.columns.set(this.getColumns()); this.pageWidth.set(this.getPageWidth()); this.menu.set(null); }
+  private getSpreadPageWidth(): number {
+    const density = window.devicePixelRatio || 1;
+    return Math.max(100, Math.floor((Math.round(window.innerWidth * density) - 3 * 16) / 2) / density);
+  }
+  @HostListener('window:resize') resize(): void { this.columns.set(this.getColumns()); this.pageWidth.set(this.getPageWidth()); this.spreadPageWidth.set(this.getSpreadPageWidth()); this.menu.set(null); }
   @HostListener('window:keydown', ['$event']) key(e: KeyboardEvent): void {
     if (e.key !== 'Escape' || this.screen() === 'editor' || this.dialog.nativeElement.open) return;
     if (this.menu()) this.menu.set(null); else if (this.screen() !== 'home') this.goBack();
@@ -274,7 +285,7 @@ export class App {
       }
       if (type === 'delete-draft') await this.store.remove(this.targetId);
       if (type === 'delete-page' && draft) await this.store.save({ ...draft, pages: draft.pages.filter(p => p.id !== this.targetId), updatedAt: Date.now() });
-      if (type === 'page-settings' && draft) await this.store.save({ ...draft, guide: this.guideValue, direction: this.directionValue, firstSpread: this.directionValue === 'ttb' ? false : this.spreadValue, updatedAt: Date.now() });
+      if (type === 'page-settings' && draft) await this.store.save({ ...draft, guide: this.guideValue, direction: this.directionValue, firstSpread: this.directionValue === 'ttb' ? false : this.spreadValue, spreadView: this.directionValue === 'ttb' ? false : this.spreadViewValue, updatedAt: Date.now() });
       if (type === 'order' && draft) await this.store.save({ ...draft, pages: [...this.order()], updatedAt: Date.now() });
       this.saving.set(false); this.closeDialog();
     } catch { this.saving.set(false); this.notify('Saving failed'); }
@@ -286,6 +297,14 @@ export class App {
     catch { this.notify('Saving failed'); }
     this.saving.set(false);
   }
+  async toggleSpreadView(): Promise<void> {
+    const draft = this.draft();
+    if (!draft || draft.direction === 'ttb' || this.saving()) return;
+    this.saving.set(true);
+    try { await this.store.save({ ...draft, spreadView: !this.spreadView(), updatedAt: Date.now() }); }
+    catch { this.notify('Saving failed'); }
+    this.saving.set(false);
+  }
   async copyPage(id: string): Promise<void> {
     this.menu.set(null); const draft = this.draft(); if (!draft) return;
     const index = draft.pages.findIndex(p => p.id === id), copy = { ...structuredClone(draft.pages[index]), id: crypto.randomUUID() };
@@ -294,7 +313,11 @@ export class App {
     catch { this.notify('Saving failed'); }
   }
   pageSettings(): void {
-    const draft = this.draft()!; this.guideValue = draft.guide; this.directionValue = draft.direction; this.spreadValue = draft.firstSpread; this.openDialog('page-settings');
+    const draft = this.draft()!; this.guideValue = draft.guide; this.directionValue = draft.direction; this.spreadValue = draft.firstSpread; this.spreadViewValue = draft.spreadView === true; this.openDialog('page-settings');
+  }
+  directionChanged(value: Direction): void {
+    this.directionValue = value;
+    if (value === 'ttb') { this.spreadValue = false; this.spreadViewValue = false; }
   }
   reorder(): void { this.order.set([...this.draft()!.pages]); this.openDialog('order'); }
   reorderDown(e: PointerEvent, id: string): void { e.preventDefault(); this.dragId = id; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newNativeDraft, newNativePage, pageGrid, parseSimpleScript, sampleDraft } from './native-model';
+import { newNativeDraft, newNativePage, pageGrid, parseSimpleScript, sampleDraft, storyboardSpreads } from './native-model';
 import { zipImages } from './native-export';
 
 describe('Original page progression', () => {
@@ -27,6 +27,25 @@ describe('Original page progression', () => {
     expect(a.pages[0].id).not.toBe(b.pages[0].id);
     expect(a.pages[0].bitmap).toBe('');
     expect(sampleDraft().pages.map(p => p.bitmap)).toEqual(['/native/sample0.png', '/native/sample1.png', '/native/sample2.png', '', '']);
+  });
+});
+
+describe('Double-page storyboard spreads', () => {
+  const draft = newNativeDraft('Draft');
+  draft.pages = Array.from({ length: 6 }, () => newNativePage());
+  const order = (direction: 'rtl' | 'ltr') => storyboardSpreads({ ...draft, direction }).map(([left, right]) => [left ? draft.pages.indexOf(left) + 1 : null, right ? draft.pages.indexOf(right) + 1 : null]);
+
+  it('keeps manga covers on the outside and reverses interior pairs', () => {
+    expect(order('rtl')).toEqual([[1, null], [3, 2], [5, 4], [null, 6]]);
+  });
+  it('keeps western covers on the outside and preserves interior pairs', () => {
+    expect(order('ltr')).toEqual([[null, 1], [2, 3], [4, 5], [6, null]]);
+  });
+  it('uses virtual placeholders without changing the page count', () => {
+    const spreads = storyboardSpreads({ ...draft, direction: 'rtl', pages: draft.pages.slice(0, 5) });
+    expect(spreads.map(([left, right]) => [left ? draft.pages.indexOf(left) + 1 : null, right ? draft.pages.indexOf(right) + 1 : null])).toEqual([[1, null], [3, 2], [5, 4]]);
+    expect(spreads.flat().filter(Boolean)).toHaveLength(5);
+    expect(draft.pages).toHaveLength(6);
   });
 });
 

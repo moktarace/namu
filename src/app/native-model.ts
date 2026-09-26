@@ -32,6 +32,8 @@ export interface NativeDraft {
   updatedAt: number;
   direction: Direction;
   firstSpread: boolean;
+  /** Whether the global storyboard displays physical double-page spreads. */
+  spreadView?: boolean;
   guide: string;
   pages: NativePage[];
 }
@@ -50,7 +52,7 @@ export function parseSimpleScript(source: string): string[][] {
   return pages;
 }
 export function newNativeDraft(title: string): NativeDraft {
-  return { id: crypto.randomUUID(), title: title.trim() || 'No Title', createdAt: Date.now(), updatedAt: Date.now(), direction: 'rtl', firstSpread: true, guide: '', pages: [newNativePage()] };
+  return { id: crypto.randomUUID(), title: title.trim() || 'No Title', createdAt: Date.now(), updatedAt: Date.now(), direction: 'rtl', firstSpread: true, spreadView: false, guide: '', pages: [newNativePage()] };
 }
 export function sampleDraft(): NativeDraft {
   return { ...newNativeDraft('Sample Draft'), pages: Array.from({ length: 5 }, (_, i) => i < 3
@@ -70,6 +72,34 @@ export function pageGrid(draft: NativeDraft, columns: number): (NativePage | nul
     for (let i = 0; i < cells.length; i += columns) cells.splice(i, columns, ...cells.slice(i, i + columns).reverse());
   }
   return cells;
+}
+
+export type StoryboardSpread = [NativePage | null, NativePage | null];
+
+/**
+ * Arrange real pages into physical double-page spreads for the global storyboard.
+ * The tuple order is always left | right as it appears on screen. Blank slots are
+ * virtual placeholders and never become pages in the draft.
+ */
+export function storyboardSpreads(draft: NativeDraft): StoryboardSpread[] {
+  const pages = draft.pages;
+  if (!pages.length) return [];
+  if (draft.direction === 'ttb') return pages.map(page => [page, null]);
+
+  const first: StoryboardSpread = draft.direction === 'rtl' ? [pages[0], null] : [null, pages[0]];
+  if (pages.length === 1) return [first];
+
+  // After the cover, pair the remaining reading-order pages. When the count is
+  // even, the final page is left alone and receives the virtual outside blank;
+  // when it is odd, it naturally closes the final interior pair (P5 | P4).
+  const remaining = pages.slice(1);
+  const spreads: StoryboardSpread[] = [first];
+  for (let index = 0; index < remaining.length; index += 2) {
+    const left = remaining[index], right = remaining[index + 1];
+    if (right) spreads.push(draft.direction === 'rtl' ? [right, left] : [left, right]);
+    else spreads.push(draft.direction === 'rtl' ? [null, left] : [left, null]);
+  }
+  return spreads;
 }
 export const nativeImage = (name: string) => assetUrl(`/native/${name}.png`);
 export async function loadImage(src: string): Promise<HTMLImageElement> {

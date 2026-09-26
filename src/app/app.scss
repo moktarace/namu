@@ -26,6 +26,13 @@
 .page-card footer>span { flex:1; }
 .page-card footer button { width:40px; height:40px; padding:4px; }
 .page-card footer button img { width:32px; height:32px; filter:brightness(.3); }
+.spread-grid { display:flex; flex-direction:column; gap:8px; padding:4px 4px 84px; }
+.spread-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0; }
+.spread-row .page-card { padding:4px; }
+.spread-row .page-open,.blank-page { width:100%; height:var(--spread-page-height); }
+.blank-page { background:#fff; }
+.blank-page-card footer { color:#777; }
+.spread-toggle span { display:block; width:100%; font-size:18px; line-height:32px; letter-spacing:-3px; text-align:center; }
 .export-fab { position:absolute; bottom:16px; right:16px; width:56px; height:56px; border-radius:50%; background:#4db6ac; box-shadow:0 3px 6px #0006; padding:12px; }
 .export-fab:hover { background:#47a79e; }
 .export-fab img { width:32px; height:32px; }

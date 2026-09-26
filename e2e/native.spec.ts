@@ -186,6 +186,29 @@ test('text can be edited, moved and deleted independently of the bitmap', async 
   await expect(page.getByRole('img', { name: 'Edited text', exact: true })).toBeVisible();
 });
 
+test('lasso moves intersected text as editable text without rasterizing it', async ({ page }) => {
+  await create(page, 'Lasso text check');
+  await tool(page, 'Text');
+  const textPoint = await point(page, 400, 500); await page.mouse.click(textPoint.x, textPoint.y);
+  await page.getByRole('textbox', { name: 'Text', exact: true }).fill('Lasso text');
+  await page.getByRole('button', { name: 'Confirm', exact: true }).click();
+  const before = await page.locator('.editable-text').evaluate(el => ({ left: parseFloat((el as HTMLElement).style.left), top: parseFloat((el as HTMLElement).style.top) }));
+  await tool(page, 'Lasso');
+  await stroke(page, [[250, 300], [700, 300], [700, 700], [250, 700], [250, 300]]);
+  await expect(page.locator('.selection-text[alt="Lasso text"]')).toBeVisible();
+  await expect(page.locator('.editable-text')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Resize and rotate', exact: true })).toHaveCount(0);
+  const selection = (await page.locator('.selection').boundingBox())!;
+  await page.mouse.move(selection.x + selection.width / 2, selection.y + selection.height / 2); await page.mouse.down();
+  await page.mouse.move(selection.x + selection.width / 2 + 50, selection.y + selection.height / 2 + 60, { steps: 8 }); await page.mouse.up();
+  await page.mouse.click((await point(page, 850, 1100)).x, (await point(page, 850, 1100)).y);
+  await expect(page.locator('.editable-text')).toHaveCount(1);
+  const after = await page.locator('.editable-text').evaluate(el => ({ left: parseFloat((el as HTMLElement).style.left), top: parseFloat((el as HTMLElement).style.top) }));
+  expect(after.left).toBeGreaterThan(before.left);
+  expect(after.top).toBeGreaterThan(before.top);
+  await expect(page.getByRole('img', { name: 'Lasso text', exact: true })).toBeVisible();
+});
+
 test('stamps transform and lasso moves cut pixels with reversible history', async ({ page }) => {
   await create(page, 'Selection check');
   await stroke(page, [[300, 400], [500, 400]]);

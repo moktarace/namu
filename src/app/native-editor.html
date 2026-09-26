@@ -21,12 +21,15 @@
     @if (selection(); as s) {
       <div class="selection" [class.stamp-selection]="!s.lasso" [style.--inverse-scale]="1 / view().scale" [style.--stamp-density]="density" [style.left.px]="s.x" [style.top.px]="s.y" [style.width.px]="s.width" [style.height.px]="s.height" [style.transform]="'rotate(' + s.rotation + 'rad)'" (pointerdown)="objectDown($event, 'move')" (pointermove)="objectMove($event)" (pointerup)="objectUp($event)" (pointercancel)="objectUp($event)">
         <img class="selection-image" [src]="s.src" alt="Selected drawing" draggable="false" [style.transform]="s.flip ? 'scaleX(-1)' : ''">
+        @for (item of s.textItems || []; track item.text.id) { <img class="selection-text" [src]="textSource(item.text)" [alt]="item.text.text" draggable="false" [style.left.px]="item.offsetX" [style.top.px]="item.offsetY"> }
         @if (s.outline) { <svg class="selection-outline" viewBox="0 0 1 1" preserveAspectRatio="none" [style.transform]="s.flip ? 'scaleX(-1)' : ''"><path [attr.d]="s.outline" fill="none" stroke="#ffffff80" [attr.stroke-width]="4 / density" vector-effect="non-scaling-stroke" /><path [attr.d]="s.outline" fill="none" stroke="#000080" [attr.stroke-width]="2 / density" [attr.stroke-dasharray]="10 / density + ' ' + 5 / density" vector-effect="non-scaling-stroke" /></svg> }
-        <button class="selection-flip handle" aria-label="Flip" [style.transform]="s.lasso ? 'scale(' + 1 / view().scale + ')' : ''" (pointerdown)="$event.stopPropagation()" (click)="flipSelection()"><img [src]="image('ic_action_hanten')" alt=""></button>
-        <button class="selection-extend handle" aria-label="Resize and rotate" [style.transform]="s.lasso ? 'scale(' + 1 / view().scale + ')' : ''" (pointerdown)="objectDown($event, 'extend')"><img [src]="image('ic_action_extend')" alt=""></button>
-        @if (s.lasso) {
-          <button class="selection-width handle" aria-label="Stretch horizontally" [style.transform]="'scale(' + 1 / view().scale + ')'" (pointerdown)="objectDown($event, 'width')"><img [src]="image('ic_action_deformation')" alt=""></button>
-          <button class="selection-height handle" aria-label="Stretch vertically" [style.transform]="'scale(' + 1 / view().scale + ') rotate(90deg)'" (pointerdown)="objectDown($event, 'height')"><img [src]="image('ic_action_deformation')" alt=""></button>
+        @if (!s.textItems?.length) {
+          <button class="selection-flip handle" aria-label="Flip" [style.transform]="s.lasso ? 'scale(' + 1 / view().scale + ')' : ''" (pointerdown)="$event.stopPropagation()" (click)="flipSelection()"><img [src]="image('ic_action_hanten')" alt=""></button>
+          <button class="selection-extend handle" aria-label="Resize and rotate" [style.transform]="s.lasso ? 'scale(' + 1 / view().scale + ')' : ''" (pointerdown)="objectDown($event, 'extend')"><img [src]="image('ic_action_extend')" alt=""></button>
+          @if (s.lasso) {
+            <button class="selection-width handle" aria-label="Stretch horizontally" [style.transform]="'scale(' + 1 / view().scale + ')'" (pointerdown)="objectDown($event, 'width')"><img [src]="image('ic_action_deformation')" alt=""></button>
+            <button class="selection-height handle" aria-label="Stretch vertically" [style.transform]="'scale(' + 1 / view().scale + ') rotate(90deg)'" (pointerdown)="objectDown($event, 'height')"><img [src]="image('ic_action_deformation')" alt=""></button>
+          }
         }
       </div>
     }

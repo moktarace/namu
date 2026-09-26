@@ -4,7 +4,8 @@ import { NativePage, NativeText, NativeTool, PAGE_HEIGHT, PAGE_WIDTH, loadImage,
 
 interface Point { x: number; y: number }
 interface Frame { bitmap: string; texts: NativeText[] }
-interface Selection { src: string; x: number; y: number; width: number; height: number; rotation: number; flip: boolean; lasso: boolean; outline?: string }
+interface SelectedText { text: NativeText; offsetX: number; offsetY: number }
+interface Selection { src: string; x: number; y: number; width: number; height: number; rotation: number; flip: boolean; lasso: boolean; outline?: string; textItems?: SelectedText[] }
 @Component({
   selector: 'native-editor', standalone: true, imports: [FormsModule],
   templateUrl: './native-editor.html', styleUrl: './native-editor.scss',
@@ -288,6 +289,27 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
     }
     c.restore();
   }
+  private pointInPolygon(point: Point, polygon: Point[]): boolean {
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const a = polygon[i], b = polygon[j], crosses = (a.y > point.y) !== (b.y > point.y);
+      if (crosses && point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x) inside = !inside;
+    }
+    return inside;
+  }
+  private segmentsIntersect(a: Point, b: Point, c: Point, d: Point): boolean {
+    const cross = (p: Point, q: Point, r: Point) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+    const ab = cross(a, b, c), ab2 = cross(a, b, d), cd = cross(c, d, a), cd2 = cross(c, d, b);
+    return ((ab >= 0 && ab2 <= 0) || (ab <= 0 && ab2 >= 0)) && ((cd >= 0 && cd2 <= 0) || (cd <= 0 && cd2 >= 0));
+  }
+  private lassoIncludesText(text: NativeText, polygon: Point[]): boolean {
+    const image = this.textRaster(text), left = text.x, top = text.y, right = left + image.width, bottom = top + image.height;
+    const corners = [{ x: left, y: top }, { x: right, y: top }, { x: right, y: bottom }, { x: left, y: bottom }];
+    if (corners.some(corner => this.pointInPolygon(corner, polygon))) return true;
+    if (polygon.some(point => point.x >= left && point.x <= right && point.y >= top && point.y <= bottom)) return true;
+    const edges: [Point, Point][] = [[corners[0], corners[1]], [corners[1], corners[2]], [corners[2], corners[3]], [corners[3], corners[0]]];
+    return polygon.some((point, i) => this.segmentsIntersect(point, polygon[(i + 1) % polygon.length], ...edges[0]) || this.segmentsIntersect(point, polygon[(i + 1) % polygon.length], ...edges[1]) || this.segmentsIntersect(point, polygon[(i + 1) % polygon.length], ...edges[2]) || this.segmentsIntersect(point, polygon[(i + 1) % polygon.length], ...edges[3]));
+  }
   private finishLasso(): void {
     const points = this.stroke;
     if (points.length < 3) { this.clearLasso(); return; }
@@ -299,8 +321,14 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
     const clip = document.createElement('canvas'); clip.width = width; clip.height = height;
     const c = clip.getContext('2d')!; c.translate(-x, -y); c.clip(path); c.drawImage(this.paint.nativeElement, 0, 0);
     this.ctx.save(); this.ctx.globalCompositeOperation = 'destination-out'; this.ctx.fill(path); this.ctx.restore();
+    const textItems = this.texts().filter(text => this.lassoIncludesText(text, points)).map(text => ({ text: structuredClone(text), offsetX: text.x - x, offsetY: text.y - y }));
+    if (textItems.length) {
+      const selectedIds = new Set(textItems.map(item => item.text.id));
+      this.texts.update(texts => texts.filter(text => !selectedIds.has(text.id)));
+      this.selectedText.set(null);
+    }
     const outline = points.map((p, i) => `${i ? 'L' : 'M'}${(p.x - x) / width},${(p.y - y) / height}`).join(' ') + ' Z';
-    this.selection.set({ src: clip.toDataURL(), x, y, width, height, rotation: 0, flip: false, lasso: true, outline });
+    this.selection.set({ src: clip.toDataURL(), x, y, width, height, rotation: 0, flip: false, lasso: true, outline, textItems: textItems.length ? textItems : undefined });
     this.clearLasso(); this.dirty.set(true);
   }
   async insertStamp(name: string): Promise<void> {
@@ -325,6 +353,9 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
       if (this.destroyed) return;
       this.ctx.save(); this.ctx.translate(selection.x + selection.width / 2, selection.y + selection.height / 2); this.ctx.rotate(selection.rotation); this.ctx.scale(selection.flip ? -1 : 1, 1);
       this.ctx.drawImage(img, -selection.width / 2, -selection.height / 2, selection.width, selection.height); this.ctx.restore();
+      if (selection.textItems?.length) {
+        this.texts.update(texts => [...texts, ...selection.textItems!.map(item => ({ ...item.text, x: selection.x + item.offsetX, y: selection.y + item.offsetY }))]);
+      }
       this.selection.set(null); this.record();
     } catch { this.message.emit('Failed'); }
     finally { this.busy.set(false); if (this.dirty() && !this.selection()) this.scheduleAutoSave(); }

@@ -4,10 +4,11 @@ import { DatePipe } from '@angular/common';
 import { SwUpdate } from '@angular/service-worker';
 import { NativeEditor } from './native-editor';
 import { NativeStore } from './native-store';
-import { Direction, GUIDES, NativeDraft, NativePage, NativeText, PAGE_HEIGHT, PAGE_WIDTH, assetUrl, downloadNative, nativeImage, newNativeDraft, newNativePage, pageBitmap, pageGrid, parseSimpleScript, storyboardSpreads, textBitmap } from './native-model';
+import { Direction, GUIDES, NativeDraft, NativePage, NativeText, PAGE_HEIGHT, PAGE_WIDTH, StoryboardSpread, assetUrl, downloadNative, nativeImage, newNativeDraft, newNativePage, pageBitmap, pageGrid, parseSimpleScript, storyboardSpreads, textBitmap } from './native-model';
 import { zipImages } from './native-export';
 
 type Dialog = 'new' | 'new-script' | 'rename' | 'delete-draft' | 'delete-page' | 'page-settings' | 'order' | 'export' | 'hand' | 'volume' | null;
+type ExportMode = 'pages' | 'storyboard';
 interface AppRoute { app: 'manganame'; session: string; index: number; screen: 'home' | 'pages' | 'editor' | 'settings'; draftId?: string; pageId?: string }
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -42,6 +43,12 @@ export class App {
   readonly menu = signal<{ kind: 'draft' | 'page'; id: string; x: number; y: number } | null>(null);
   readonly order = signal<NativePage[]>([]);
   readonly selectedExports = signal<string[]>([]);
+  readonly selectedSpreads = signal<number[]>([]);
+  readonly exportMode = signal<ExportMode>('pages');
+  readonly exportSpreads = computed(() => {
+    const draft = this.draft();
+    return draft && draft.direction !== 'ttb' ? storyboardSpreads(draft) : [];
+  });
   readonly exporting = signal(false);
   readonly toast = signal('');
   readonly saving = signal(false);
@@ -336,32 +343,71 @@ export class App {
     if (!['ArrowUp', 'ArrowDown'].includes(e.key)) return; e.preventDefault();
     this.order.update(list => { const next = [...list], index = next.findIndex(p => p.id === id), target = Math.max(0, Math.min(next.length - 1, index + (e.key === 'ArrowUp' ? -1 : 1))); next.splice(target, 0, next.splice(index, 1)[0]); return next; });
   }
-  exportDialog(): void { this.selectedExports.set([]); this.openDialog('export'); }
+  exportDialog(): void { this.selectedExports.set([]); this.selectedSpreads.set([]); this.exportMode.set('pages'); this.openDialog('export'); }
   toggleExport(id: string): void { this.selectedExports.update(list => list.includes(id) ? list.filter(v => v !== id) : [...list, id]); }
-  selectAllExports(): void { this.selectedExports.set(this.selectedExports().length === this.draft()!.pages.length ? [] : this.draft()!.pages.map(p => p.id)); }
+  toggleSpreadExport(index: number): void { this.selectedSpreads.update(list => list.includes(index) ? list.filter(v => v !== index) : [...list, index]); }
+  setExportMode(mode: ExportMode): void {
+    if (mode === 'storyboard' && !this.exportSpreads().length) return;
+    this.exportMode.set(mode);
+  }
+  allExportsSelected(): boolean {
+    return this.exportMode() === 'pages'
+      ? this.selectedExports().length === this.draft()!.pages.length
+      : this.exportSpreads().length > 0 && this.selectedSpreads().length === this.exportSpreads().length;
+  }
+  selectAllExports(): void {
+    if (this.exportMode() === 'pages') {
+      this.selectedExports.set(this.allExportsSelected() ? [] : this.draft()!.pages.map(p => p.id));
+    } else {
+      this.selectedSpreads.set(this.allExportsSelected() ? [] : this.exportSpreads().map((_, index) => index));
+    }
+  }
+  private async spreadBitmap(spread: StoryboardSpread): Promise<HTMLCanvasElement> {
+    const canvas = document.createElement('canvas');
+    canvas.width = PAGE_WIDTH * 2; canvas.height = PAGE_HEIGHT;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    for (const [index, page] of spread.entries()) {
+      if (page) ctx.drawImage(await pageBitmap(page), index * PAGE_WIDTH, 0);
+    }
+    return canvas;
+  }
+  private async saveOrShareExport(files: File[], draft: NativeDraft, share: boolean): Promise<void> {
+    if (share && navigator.canShare?.({ files })) { await navigator.share({ files }); return; }
+    if (files.length === 1) downloadNative(files[0], files[0].name);
+    else {
+      const images = await Promise.all(files.map(async f => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })));
+      downloadNative(zipImages(images), `${draft.title.replace(/[\\/:*?"<>|]/g, '_') || 'MangaName'}.zip`);
+    }
+    if (share) this.notify('Sharing is unavailable in this browser. Images downloaded.');
+    else this.notify('Exporting finished.');
+  }
   async exportPages(share: boolean): Promise<void> {
     if (this.exporting()) return;
-    const draft = this.draft()!, pages = draft.pages.filter(p => this.selectedExports().includes(p.id));
-    if (!pages.length) { this.notify('Select an image.'); return; }
-    const valid = pages.filter(p => p.bitmap || p.texts.length);
-    if (!valid.length) { this.notify(share ? 'Blank pages cannot be shared.' : 'Blank pages cannot be saved.'); return; }
+    const draft = this.draft()!;
+    if (this.exportMode() === 'pages' && !this.selectedExports().length) { this.notify('Select an image.'); return; }
+    if (this.exportMode() === 'storyboard' && !this.selectedSpreads().length) { this.notify('Select a double-page spread.'); return; }
     this.exporting.set(true);
     try {
       const files: File[] = [];
-      for (const page of valid) {
-        const canvas = await pageBitmap(page), blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error('Failed')), 'image/png'));
-        files.push(new File([blob], `Page${draft.pages.findIndex(p => p.id === page.id) + 1}.png`, { type: 'image/png' }));
-      }
-      if (share && navigator.canShare?.({ files })) await navigator.share({ files });
-      else {
-        if (files.length === 1) downloadNative(files[0], files[0].name);
-        else {
-          const images = await Promise.all(files.map(async f => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })));
-          downloadNative(zipImages(images), `${draft.title.replace(/[\\/:*?"<>|]/g, '_') || 'MangaName'}.zip`);
+      if (this.exportMode() === 'pages') {
+        const pages = draft.pages.filter(p => this.selectedExports().includes(p.id));
+        const valid = pages.filter(p => p.bitmap || p.texts.length);
+        if (!valid.length) { this.notify(share ? 'Blank pages cannot be shared.' : 'Blank pages cannot be saved.'); this.exporting.set(false); return; }
+        for (const page of valid) {
+          const canvas = await pageBitmap(page), blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error('Failed')), 'image/png'));
+          files.push(new File([blob], `Page${draft.pages.findIndex(p => p.id === page.id) + 1}.png`, { type: 'image/png' }));
         }
-        if (share) this.notify('Sharing is unavailable in this browser. Images downloaded.');
-        else this.notify('Exporting finished.');
+      } else {
+        const spreads = this.exportSpreads().map((spread, index) => ({ spread, index })).filter(({ index }) => this.selectedSpreads().includes(index));
+        const valid = spreads.filter(({ spread }) => spread.some(page => page && (page.bitmap || page.texts.length)));
+        if (!valid.length) { this.notify(share ? 'Blank spreads cannot be shared.' : 'Blank spreads cannot be saved.'); this.exporting.set(false); return; }
+        for (const { spread, index } of valid) {
+          const canvas = await this.spreadBitmap(spread), blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error('Failed')), 'image/png'));
+          files.push(new File([blob], `${draft.title.replace(/[\\/:*?"<>|]/g, '_') || 'MangaName'}-spread-${String(index + 1).padStart(2, '0')}.png`, { type: 'image/png' }));
+        }
       }
+      await this.saveOrShareExport(files, draft, share);
     } catch (e) { if (!(e instanceof DOMException && e.name === 'AbortError')) this.notify('Failed'); }
     this.exporting.set(false);
   }

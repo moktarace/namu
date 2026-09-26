@@ -287,6 +287,19 @@ test('sample progression, guides, reorder, copy and real PNG/ZIP exports', async
   expect(zip.readUInt16LE(zip.length - 12)).toBe(2);
 });
 
+test('exports a selected storyboard spread as a two-page PNG', async ({ page }) => {
+  await boot(page);
+  await page.getByRole('button', { name: /^Sample Draft ---/ }).click();
+  await page.getByRole('button', { name: 'Select image', exact: true }).click();
+  await page.getByRole('tab', { name: 'Storyboard', exact: true }).click();
+  await page.getByRole('button', { name: 'Select spread 1', exact: true }).click();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  const png = await readFile((await (await download).path())!);
+  expect(png.subarray(1, 4).toString()).toBe('PNG');
+  expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([2000, 1414]);
+});
+
 test('recovers prototype drawings once without modifying their original database', async ({ page }) => {
   // Same test origin, but no running Angular application while the legacy fixture is written.
   await page.goto('/manifest.webmanifest');

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newNativeDraft, newNativePage, pageGrid, parseSimpleScript, sampleDraft, storyboardSpreads } from './native-model';
+import { PANEL_TEMPLATES, newNativeDraft, newNativePage, pageGrid, panelLayout, parseSimpleScript, sampleDraft, storyboardSpreads, PAGE_HEIGHT, PAGE_WIDTH } from './native-model';
 import { zipImages } from './native-export';
 
 describe('Original page progression', () => {
@@ -76,5 +76,51 @@ describe('Simple storyboard scripts', () => {
   });
   it('accepts compact bullets and ignores trailing separators', () => {
     expect(parseSimpleScript('-Un\n---\n- Deux\n---')).toEqual([['Un'], ['Deux']]);
+  });
+});
+
+describe('Panel templates', () => {
+  it('keeps every template inside the page with the expected panel count', () => {
+    for (const [template, , count] of PANEL_TEMPLATES) {
+      const layout = panelLayout(template as Parameters<typeof panelLayout>[0]);
+      expect(layout.panels).toHaveLength(count);
+      for (const panel of layout.panels) {
+        expect(panel.x).toBeGreaterThanOrEqual(0);
+        expect(panel.y).toBeGreaterThanOrEqual(0);
+        expect(panel.x + panel.width).toBeLessThanOrEqual(PAGE_WIDTH);
+        expect(panel.y + panel.height).toBeLessThanOrEqual(PAGE_HEIGHT);
+      }
+      for (let i = 0; i < layout.panels.length; i++) for (let j = i + 1; j < layout.panels.length; j++) {
+        const a = layout.panels[i], b = layout.panels[j];
+        const overlap = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x))
+          * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+        expect(overlap, `panels overlap in ${template}`).toBe(0);
+      }
+      const rows = new Map<number, number[]>();
+      for (const panel of layout.panels) if (panel.height < PAGE_HEIGHT * .82) {
+        const row = Math.round(panel.y);
+        rows.set(row, [...(rows.get(row) || []), panel.height]);
+      }
+      for (const heights of rows.values()) if (heights.length > 1) expect(new Set(heights).size, `row heights in ${template}`).toBe(1);
+      expect(layout.horizontalGutter).toBeGreaterThan(layout.verticalGutter!);
+    }
+  });
+
+  it('matches the definitive sheet count without adding named variants', () => {
+    expect(PANEL_TEMPLATES).toHaveLength(52);
+    expect(PANEL_TEMPLATES.map(([, , count]) => count)).toEqual([
+      1,
+      ...Array(6).fill(2), ...Array(6).fill(3), ...Array(9).fill(4),
+      ...Array(8).fill(5), ...Array(8).fill(6), ...Array(7).fill(7), ...Array(7).fill(8),
+    ]);
+    expect(PANEL_TEMPLATES[0]).toEqual(['one-1', '1 panel · Template 1', 1]);
+  });
+
+  it('keeps four-panel templates asymmetric instead of creating a central cross', () => {
+    for (const [template, , count] of PANEL_TEMPLATES.filter(item => item[2] === 4)) {
+      const areas = panelLayout(template as Parameters<typeof panelLayout>[0]).panels.map(panel => Math.round(panel.width * panel.height));
+      expect(count).toBe(4);
+      expect(new Set(areas).size).toBeGreaterThan(1);
+    }
   });
 });

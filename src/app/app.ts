@@ -45,6 +45,7 @@ export class App {
   readonly selectedExports = signal<string[]>([]);
   readonly selectedSpreads = signal<number[]>([]);
   readonly exportMode = signal<ExportMode>('pages');
+  includePanels = false;
   readonly exportSpreads = computed(() => {
     const draft = this.draft();
     return draft && draft.direction !== 'ttb' ? storyboardSpreads(draft) : [];
@@ -343,7 +344,7 @@ export class App {
     if (!['ArrowUp', 'ArrowDown'].includes(e.key)) return; e.preventDefault();
     this.order.update(list => { const next = [...list], index = next.findIndex(p => p.id === id), target = Math.max(0, Math.min(next.length - 1, index + (e.key === 'ArrowUp' ? -1 : 1))); next.splice(target, 0, next.splice(index, 1)[0]); return next; });
   }
-  exportDialog(): void { this.selectedExports.set([]); this.selectedSpreads.set([]); this.exportMode.set('pages'); this.openDialog('export'); }
+  exportDialog(): void { this.selectedExports.set([]); this.selectedSpreads.set([]); this.exportMode.set('pages'); this.includePanels = false; this.openDialog('export'); }
   toggleExport(id: string): void { this.selectedExports.update(list => list.includes(id) ? list.filter(v => v !== id) : [...list, id]); }
   toggleSpreadExport(index: number): void { this.selectedSpreads.update(list => list.includes(index) ? list.filter(v => v !== index) : [...list, index]); }
   setExportMode(mode: ExportMode): void {
@@ -362,13 +363,13 @@ export class App {
       this.selectedSpreads.set(this.allExportsSelected() ? [] : this.exportSpreads().map((_, index) => index));
     }
   }
-  private async spreadBitmap(spread: StoryboardSpread): Promise<HTMLCanvasElement> {
+  private async spreadBitmap(spread: StoryboardSpread, includePanels: boolean): Promise<HTMLCanvasElement> {
     const canvas = document.createElement('canvas');
     canvas.width = PAGE_WIDTH * 2; canvas.height = PAGE_HEIGHT;
     const ctx = canvas.getContext('2d')!;
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     for (const [index, page] of spread.entries()) {
-      if (page) ctx.drawImage(await pageBitmap(page), index * PAGE_WIDTH, 0);
+      if (page) ctx.drawImage(await pageBitmap(page, PAGE_WIDTH, { includePanels }), index * PAGE_WIDTH, 0);
     }
     return canvas;
   }
@@ -395,7 +396,7 @@ export class App {
         const valid = pages.filter(p => p.bitmap || p.texts.length);
         if (!valid.length) { this.notify(share ? 'Blank pages cannot be shared.' : 'Blank pages cannot be saved.'); this.exporting.set(false); return; }
         for (const page of valid) {
-          const canvas = await pageBitmap(page), blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error('Failed')), 'image/png'));
+          const canvas = await pageBitmap(page, PAGE_WIDTH, { includePanels: this.includePanels }), blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error('Failed')), 'image/png'));
           files.push(new File([blob], `Page${draft.pages.findIndex(p => p.id === page.id) + 1}.png`, { type: 'image/png' }));
         }
       } else {
@@ -403,7 +404,7 @@ export class App {
         const valid = spreads.filter(({ spread }) => spread.some(page => page && (page.bitmap || page.texts.length)));
         if (!valid.length) { this.notify(share ? 'Blank spreads cannot be shared.' : 'Blank spreads cannot be saved.'); this.exporting.set(false); return; }
         for (const { spread, index } of valid) {
-          const canvas = await this.spreadBitmap(spread), blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error('Failed')), 'image/png'));
+          const canvas = await this.spreadBitmap(spread, this.includePanels), blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error('Failed')), 'image/png'));
           files.push(new File([blob], `${draft.title.replace(/[\\/:*?"<>|]/g, '_') || 'MangaName'}-spread-${String(index + 1).padStart(2, '0')}.png`, { type: 'image/png' }));
         }
       }

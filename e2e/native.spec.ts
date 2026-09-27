@@ -83,6 +83,31 @@ test('creates pages with distributed dialogue text from a simple script', async 
   await expect(page.getByRole('img', { name: 'One', exact: true })).toBeVisible();
 });
 
+test('applies a visual panel template without selecting or numbering individual panels', async ({ page }) => {
+  await create(page, 'Panel template check');
+  await page.getByRole('button', { name: 'Panel template', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('button', { name: 'Remove panels', exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: '4 panels · Template 1', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Apply', exact: true }).click();
+  await expect(page.locator('.panel-guides rect')).toHaveCount(4);
+  await expect(page.locator('.panel-guides')).toHaveCSS('pointer-events', 'none');
+  await expect(page.locator('.panel-guides text')).toHaveCount(0);
+  await save(page);
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByRole('button', { name: 'Page1', exact: true }).click();
+  await expect(page.locator('.panel-guides rect')).toHaveCount(4);
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByRole('button', { name: 'Select image', exact: true }).click();
+  const exportDialog = page.getByRole('dialog');
+  const includePanels = exportDialog.getByRole('checkbox', { name: 'Include panel borders', exact: true });
+  await expect(includePanels).toBeVisible();
+  await includePanels.check();
+  await expect(includePanels).toBeChecked();
+  await exportDialog.getByRole('tab', { name: 'Storyboard', exact: true }).click();
+  await expect(exportDialog.getByRole('checkbox', { name: 'Include panel borders', exact: true })).toBeChecked();
+});
+
 test('autosaves after idle and exposes the save state', async ({ page }) => {
   await create(page, 'Autosave check');
   await stroke(page, [[200, 400], [650, 400]]);

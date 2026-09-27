@@ -1,9 +1,9 @@
 import { AfterViewInit, Component, ElementRef, EventEmitter, HostListener, Input, OnDestroy, Output, ViewChild, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { NativePage, NativeText, NativeTool, PAGE_HEIGHT, PAGE_WIDTH, loadImage, nativeImage, pageBitmap, textBitmap } from './native-model';
+import { NativePage, NativePanelLayout, NativeText, NativeTool, PANEL_TEMPLATES, PAGE_HEIGHT, PAGE_WIDTH, PanelTemplate, loadImage, nativeImage, pageBitmap, panelLayout, textBitmap } from './native-model';
 
 interface Point { x: number; y: number }
-interface Frame { bitmap: string; texts: NativeText[] }
+interface Frame { bitmap: string; texts: NativeText[]; panels: NativePanelLayout | null }
 interface SelectedText { text: NativeText; offsetX: number; offsetY: number }
 interface Selection { src: string; x: number; y: number; width: number; height: number; rotation: number; flip: boolean; lasso: boolean; outline?: string; textItems?: SelectedText[] }
 @Component({
@@ -60,7 +60,10 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
   readonly verticalBar = signal(true);
   readonly bar = signal({ x: 0, y: 1 / this.density });
   readonly view = signal({ x: 0, y: 0, scale: 1, rotation: 0 });
-  readonly dialogType = signal<'tool' | 'text' | 'clear' | 'leave' | null>(null);
+  readonly dialogType = signal<'tool' | 'text' | 'panels' | 'clear' | 'leave' | null>(null);
+  readonly panelTemplates = PANEL_TEMPLATES;
+  readonly panelLayout = signal<NativePanelLayout | null>(null);
+  panelTemplateValue: PanelTemplate = 'none';
   readonly stampOpen = signal(true);
   readonly stampTab = signal<'mark' | 'face'>('mark');
   readonly stamps = computed(() => this.stampTab() === 'mark'
@@ -129,6 +132,12 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
       this.verticalBar.set(localStorage.getItem('manganame-toolbar-vertical') !== 'false');
       if (this.page.bitmap) this.ctx.drawImage(await loadImage(this.page.bitmap), 0, 0, PAGE_WIDTH, PAGE_HEIGHT);
       this.texts.set(structuredClone(this.page.texts));
+      const savedPanels = this.page.panels;
+      this.panelLayout.set(savedPanels
+        ? (!savedPanels.verticalGutter || !savedPanels.horizontalGutter
+          ? panelLayout(savedPanels.template, savedPanels.margin, savedPanels.gutter)
+          : structuredClone(savedPanels))
+        : null);
       this.frames = [this.frame()]; this.savedKey = JSON.stringify(this.frames[0]);
       this.saving.set(false); this.autoSavePending.set(false);
       this.fit();
@@ -456,7 +465,7 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
     recognition.onend = () => { this.speechAbort = undefined; };
     try { recognition.start(); } catch { this.message.emit('Voice recognition not supported'); }
   }
-  private frame(): Frame { return { bitmap: this.paint.nativeElement.toDataURL(), texts: structuredClone(this.texts()) }; }
+  private frame(): Frame { return { bitmap: this.paint.nativeElement.toDataURL(), texts: structuredClone(this.texts()), panels: this.panelLayout() ? structuredClone(this.panelLayout()!) : null }; }
   private record(): void {
     const frame = this.frame();
     if (JSON.stringify(frame) !== JSON.stringify(this.frames[this.cursor])) {
@@ -478,7 +487,7 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
       const img = await loadImage(frame.bitmap);
       if (this.destroyed || revision !== this.requestRevision) return;
       this.ctx.clearRect(0, 0, PAGE_WIDTH, PAGE_HEIGHT); this.ctx.drawImage(img, 0, 0);
-      this.texts.set(structuredClone(frame.texts)); this.selectedText.set(null); this.updateHistory();
+      this.texts.set(structuredClone(frame.texts)); this.panelLayout.set(frame.panels ? structuredClone(frame.panels) : null); this.selectedText.set(null); this.updateHistory();
     } finally { this.busy.set(false); if (this.dirty() && !this.selection()) this.scheduleAutoSave(); }
   }
   async undo(): Promise<void> {
@@ -511,7 +520,7 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
     this.cancelAutoSave();
     this.busy.set(true); this.saving.set(true);
     try {
-      const output: NativePage = { ...this.page, bitmap: this.paint.nativeElement.toDataURL(), texts: structuredClone(this.texts()), thumbnail: '' };
+      const output: NativePage = { ...this.page, bitmap: this.paint.nativeElement.toDataURL(), texts: structuredClone(this.texts()), panels: this.panelLayout() ? structuredClone(this.panelLayout()!) : undefined, thumbnail: '' };
       output.thumbnail = (await pageBitmap(output, 212)).toDataURL();
       this.pageSave.emit(output);
     } catch { this.message.emit('Saving failed'); this.saving.set(false); this.busy.set(false); }
@@ -533,7 +542,18 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
     else this.navigate.emit(index);
   }
   discardAndLeave(): void { this.closeDialog(); this.navigate.emit(this.pendingNavigation); }
-  openDialog(type: 'tool' | 'text' | 'clear' | 'leave'): void {
+  openPanelDialog(): void {
+    this.panelTemplateValue = this.panelLayout()?.template || 'none';
+    this.openDialog('panels');
+  }
+  previewPanels(template: PanelTemplate): NativePanelLayout['panels'] {
+    return template === 'none' ? [] : panelLayout(template).panels;
+  }
+  applyPanelTemplate(): void {
+    this.panelLayout.set(this.panelTemplateValue === 'none' ? null : panelLayout(this.panelTemplateValue));
+    this.record(); this.closeDialog();
+  }
+  openDialog(type: 'tool' | 'text' | 'panels' | 'clear' | 'leave'): void {
     const wasOpen = this.dialog.nativeElement.open;
     if (!wasOpen) {
       const active = document.activeElement;

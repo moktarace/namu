@@ -125,7 +125,7 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
     stage.addEventListener('pointerup', this.captureUp, true);
     stage.addEventListener('pointercancel', this.captureUp, true);
     try {
-      await document.fonts.load('100 16px \"MangaName Noto Sans\"');
+      await document.fonts.load('100 16px \"Namu Noto Sans\"');
       const stored = localStorage.getItem('manganame-tools');
       if (stored) {
         const value = JSON.parse(stored);

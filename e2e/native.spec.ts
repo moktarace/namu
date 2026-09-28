@@ -178,7 +178,7 @@ test('PWA metadata separates the install shell from lazy media', async ({ page }
   expect(manifest.categories).toEqual(expect.arrayContaining(['graphics', 'productivity']));
   const ngsw = await (await page.request.get('/ngsw.json')).json();
   expect(ngsw.assetGroups).toEqual(expect.arrayContaining([
-    expect.objectContaining({ name: 'manganame', installMode: 'prefetch' }),
+    expect.objectContaining({ name: 'namu', installMode: 'prefetch' }),
     expect.objectContaining({ name: 'media', installMode: 'lazy', updateMode: 'lazy' }),
   ]));
 });

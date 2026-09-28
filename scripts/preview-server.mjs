@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
-const root = resolve('dist/manganame-pwa/browser');
+const root = resolve('dist/namu/browser');
 const mime = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',

@@ -1,4 +1,4 @@
-# MangaName 2.4 — portage Angular PWA
+# Namu — portage Angular PWA
 
 Le portage vise l’interface et les comportements de l’APK fourni, avec suppression de la synchronisation MediBang et des publicités. La première interface « atelier » a été remplacée par les écrans sombres d’origine, leurs icônes, les 82 tampons, les repères et l’exemple de cinq pages. Les libellés reprennent la version anglaise de l’APK.
 

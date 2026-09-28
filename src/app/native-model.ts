@@ -202,12 +202,12 @@ export function textBitmap(text: Pick<NativeText, 'text' | 'size' | 'vertical'>)
   const lines = text.text.split('\n');
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d')!;
-  ctx.font = `100 ${text.size}px "MangaName Noto Sans", sans-serif`;
+  ctx.font = `100 ${text.size}px "Namu Noto Sans", sans-serif`;
   const step = text.size + 2;
   canvas.width = Math.max(1, Math.ceil(text.vertical ? lines.length * step : Math.max(...lines.map(l => [...l].reduce((width, char) => width + ctx.measureText(char).width + 2, -2))) + 2));
   canvas.height = Math.max(1, Math.ceil(text.vertical ? Math.max(...lines.map(l => [...l].length)) * step : lines.length * step));
   if (canvas.width > 2048 || canvas.height > 2048) throw new Error('Number of characters per line is too many.');
-  ctx.font = `100 ${text.size}px "MangaName Noto Sans", sans-serif`;
+  ctx.font = `100 ${text.size}px "Namu Noto Sans", sans-serif`;
   ctx.textBaseline = 'top';
   ctx.fillStyle = '#000';
   lines.forEach((line, i) => {
@@ -217,7 +217,7 @@ export function textBitmap(text: Pick<NativeText, 'text' | 'size' | 'vertical'>)
   return canvas;
 }
 export async function pageBitmap(page: NativePage, width = PAGE_WIDTH, options: { includePanels?: boolean } = {}): Promise<HTMLCanvasElement> {
-  await document.fonts.load('100 16px \"MangaName Noto Sans\"');
+  await document.fonts.load('100 16px \"Namu Noto Sans\"');
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = Math.round(PAGE_HEIGHT * width / PAGE_WIDTH);

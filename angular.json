@@ -10,7 +10,7 @@
   },
   "newProjectRoot": "projects",
   "projects": {
-    "manganame-pwa": {
+    "namu": {
       "projectType": "application",
       "schematics": {
         "@schematics/angular:component": {
@@ -66,10 +66,10 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "manganame-pwa:build:production"
+              "buildTarget": "namu:build:production"
             },
             "development": {
-              "buildTarget": "manganame-pwa:build:development"
+              "buildTarget": "namu:build:development"
             }
           },
           "defaultConfiguration": "development"

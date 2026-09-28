@@ -20,7 +20,7 @@ export class NativeStore {
         };
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
-        request.onblocked = () => reject(new Error('Close the other MangaName tabs and reload.'));
+        request.onblocked = () => reject(new Error('Close the other Namu tabs and reload.'));
       });
       try { await importPrototype(this.db); } catch (e) { this.fail(e); }
       const tx = this.db.transaction(['drafts', 'meta'], 'readonly');

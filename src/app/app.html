@@ -1,5 +1,5 @@
 @if (walkthrough()) {
-  <main class="walkthrough"><div><img [src]="image('walkthrough_image')" alt="MangaName"></div><footer><button aria-label="Start" (click)="finishWalkthrough()"><img [src]="image('walkthrough_button')" alt=""></button></footer></main>
+  <main class="walkthrough"><div><img [src]="image('walkthrough_image')" alt="Namu"></div><footer><button aria-label="Start" (click)="finishWalkthrough()"><img [src]="image('walkthrough_button')" alt=""></button></footer></main>
 } @else if (screen() === 'editor') {
   @for (page of editorPages(); track page.id) { <native-editor [page]="page" [title]="draft()!.title" [pageNumber]="editorIndex() + 1" [pageCount]="draft()!.pages.length" [guide]="draft()!.guide" [leftHanded]="hand() === 'left_handed'" [volumeControl]="volume()" (pageSave)="savePage($event)" (navigate)="navigateEditor($event)" (message)="notify($event)" /> }
 } @else {
@@ -63,8 +63,8 @@
   } @else if (screen() === 'settings') {
     <main class="preferences">
       <h2>Settings</h2>
-      @if (installAvailable()) { <button class="preference" (click)="installPwa()"><span>Install MangaName</span><small>Add the app to your device for a standalone offline experience</small></button> }
-      @if (updateAvailable()) { <button class="preference" (click)="applyUpdate()"><span>Update available</span><small>Reload to use the latest version of MangaName</small></button> }
+      @if (installAvailable()) { <button class="preference" (click)="installPwa()"><span>Install Namu</span><small>Add the app to your device for a standalone offline experience</small></button> }
+      @if (updateAvailable()) { <button class="preference" (click)="applyUpdate()"><span>Update available</span><small>Reload to use the latest version of Namu</small></button> }
       <button class="preference" (click)="openDialog('hand')"><span>Dominant Hand Settings</span><small>Change the location of full screen button</small></button>
       <button class="preference" (click)="openDialog('volume')"><span>Volume Control Button Settings</span><small>Select the process when pressing the volume button on the paint screen</small></button>
       <h2>Others</h2>

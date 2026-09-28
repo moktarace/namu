@@ -54,7 +54,7 @@ export function newProject(
 export function parseProject(raw: string): Project {
   const data = JSON.parse(raw);
   if (data.format !== 'manganame' || data.version !== 1)
-    throw new Error('Ce fichier n’est pas un projet MangaName compatible.');
+    throw new Error('Ce fichier n’est pas un projet Namu compatible.');
   const p = data.project;
   if (
     !p ||

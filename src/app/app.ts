@@ -228,7 +228,7 @@ export class App {
   scriptHasDialogues(): boolean { return parseSimpleScript(this.scriptValue).some(page => page.length > 0); }
   private wrapScriptText(value: string, size: number, maxWidth: number): string {
     const ctx = document.createElement('canvas').getContext('2d')!;
-    ctx.font = `100 ${size}px "MangaName Noto Sans", sans-serif`;
+      ctx.font = `100 ${size}px "Namu Noto Sans", sans-serif`;
     const lines: string[] = [];
     for (const paragraph of value.split('\n')) {
       let line = '';
@@ -270,7 +270,7 @@ export class App {
   private async draftFromScript(): Promise<NativeDraft> {
     const parsed = parseSimpleScript(this.scriptValue);
     if (!parsed.some(page => page.length)) throw new Error('Add at least one dialogue beginning with -');
-    await document.fonts.load('100 16px "MangaName Noto Sans"');
+    await document.fonts.load('100 16px "Namu Noto Sans"');
     const draft = newNativeDraft(this.titleValue), pages = parsed.map(dialogues => this.scriptPage(dialogues));
     for (const page of pages) page.thumbnail = (await pageBitmap(page, 212)).toDataURL();
     return { ...draft, pages, updatedAt: Date.now() };
@@ -381,7 +381,7 @@ export class App {
     if (files.length === 1) downloadNative(files[0], files[0].name);
     else {
       const images = await Promise.all(files.map(async f => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })));
-      downloadNative(zipImages(images), `${draft.title.replace(/[\\/:*?"<>|]/g, '_') || 'MangaName'}.zip`);
+      downloadNative(zipImages(images), `${draft.title.replace(/[\\/:*?"<>|]/g, '_') || 'Namu'}.zip`);
     }
     if (share) this.notify('Sharing is unavailable in this browser. Images downloaded.');
     else this.notify('Exporting finished.');
@@ -408,7 +408,7 @@ export class App {
         if (!valid.length) { this.notify(share ? 'Blank spreads cannot be shared.' : 'Blank spreads cannot be saved.'); this.exporting.set(false); return; }
         for (const { spread, index } of valid) {
           const canvas = await this.spreadBitmap(spread, this.includePanels), blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error('Failed')), 'image/png'));
-          files.push(new File([blob], `${draft.title.replace(/[\\/:*?"<>|]/g, '_') || 'MangaName'}-spread-${String(index + 1).padStart(2, '0')}.png`, { type: 'image/png' }));
+          files.push(new File([blob], `${draft.title.replace(/[\\/:*?"<>|]/g, '_') || 'Namu'}-spread-${String(index + 1).padStart(2, '0')}.png`, { type: 'image/png' }));
         }
       }
       await this.saveOrShareExport(files, draft, share);

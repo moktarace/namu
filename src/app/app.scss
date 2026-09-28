@@ -4,6 +4,11 @@
 .team-filter { padding:8px 12px; border-bottom:var(--physical-pixel) solid #7777; }
 .team-filter select { height:36px; min-height:36px; color:#777; border-bottom-color:#555; }
 .draft-list,.pages-scroll { flex:1; overflow-y:auto; position:relative; min-height:0; }
+.pwa-install-card { width:calc(100% - 24px); min-height:64px; margin:12px; padding:12px 16px; justify-content:space-between; gap:12px; text-align:left; background:#313131; border:1px solid #4db6ac; box-shadow:0 2px 8px #0004; }
+.pwa-install-copy { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.pwa-install-copy strong { color:#80cbc4; font-size:16px; font-weight:500; }
+.pwa-install-copy small { color:#d0d0d0; font-size:13px; line-height:18px; }
+.pwa-install-arrow { color:#80cbc4; font-size:30px; line-height:30px; flex:none; }
 .draft-row { position:relative; border-bottom:var(--physical-pixel) solid #7777; content-visibility:auto; contain-intrinsic-size:123px; }
 .draft-open { width:100%; padding:12px 16px; text-align:left; justify-content:flex-start; align-items:flex-start; gap:12px; }
 .draft-thumbnail { width:70px; height:99px; flex:none; background:white; align-self:center; }
@@ -46,6 +51,10 @@
 .pwa-update { position:fixed; left:12px; right:12px; bottom:12px; z-index:40; min-height:48px; display:flex; align-items:center; gap:12px; padding:8px 8px 8px 16px; background:#313131; border:1px solid #4db6ac; box-shadow:0 4px 16px #0008; }
 .pwa-update span { flex:1; font-size:14px; }
 .pwa-update button { min-height:36px; padding:8px 16px; color:#80cbc4; font-size:14px; font-weight:500; text-transform:uppercase; }
+.pwa-install-preference { border-left:3px solid #4db6ac; }
+.pwa-install-preference span { color:#80cbc4; }
+.install-body ol { margin:16px 0; padding-left:24px; }
+.install-body li { margin:12px 0; }
 .menu-scrim { position:absolute; inset:0; z-index:30; }
 .popup-menu { position:absolute; width:184px; padding:8px 0; background:#424242; box-shadow:0 4px 14px #0006; z-index:31; border-radius:2px; }
 .popup-menu button { width:100%; min-height:48px; padding:0 16px; justify-content:flex-start; }

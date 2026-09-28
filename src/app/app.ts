@@ -7,7 +7,7 @@ import { NativeStore } from './native-store';
 import { Direction, GUIDES, NativeDraft, NativePage, NativeText, PAGE_HEIGHT, PAGE_WIDTH, StoryboardSpread, assetUrl, downloadNative, nativeImage, newNativeDraft, newNativePage, pageBitmap, pageGrid, parseSimpleScript, storyboardSpreads, textBitmap } from './native-model';
 import { zipImages } from './native-export';
 
-type Dialog = 'new' | 'new-script' | 'rename' | 'delete-draft' | 'delete-page' | 'page-settings' | 'order' | 'export' | 'hand' | 'volume' | null;
+type Dialog = 'new' | 'new-script' | 'rename' | 'delete-draft' | 'delete-page' | 'page-settings' | 'order' | 'export' | 'hand' | 'volume' | 'install' | null;
 type ExportMode = 'pages' | 'storyboard';
 interface AppRoute { app: 'manganame'; session: string; index: number; screen: 'home' | 'pages' | 'editor' | 'settings'; draftId?: string; pageId?: string }
 interface BeforeInstallPromptEvent extends Event {
@@ -54,6 +54,7 @@ export class App {
   readonly toast = signal('');
   readonly saving = signal(false);
   readonly installAvailable = signal(false);
+  readonly standalone = signal(this.isStandalone());
   readonly updateAvailable = signal(false);
   readonly hand = signal(localStorage.getItem('manganame-hand') || 'right_handed');
   readonly volume = signal(localStorage.getItem('manganame-volume') || 'none');
@@ -130,11 +131,30 @@ export class App {
   @HostListener('window:beforeinstallprompt', ['$event']) captureInstallPrompt(event: Event): void {
     event.preventDefault(); this.installPrompt = event as BeforeInstallPromptEvent; this.installAvailable.set(true);
   }
+  @HostListener('window:appinstalled') pwaInstalled(): void {
+    this.installPrompt = undefined; this.installAvailable.set(false); this.standalone.set(true); this.notify('Namu was added to your Home Screen');
+  }
+  private isIosDevice(): boolean {
+    return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+  private isStandalone(): boolean {
+    const nav = navigator as Navigator & { standalone?: boolean };
+    return window.matchMedia?.('(display-mode: standalone)').matches === true || nav.standalone === true;
+  }
+  readonly installOffer = computed(() => !this.standalone() && (this.installAvailable() || this.isIosDevice()));
   async installPwa(): Promise<void> {
-    const prompt = this.installPrompt; if (!prompt) return;
-    this.installPrompt = undefined; this.installAvailable.set(false);
-    try { await prompt.prompt(); await prompt.userChoice; }
-    catch { this.notify('Installation unavailable'); }
+    const prompt = this.installPrompt;
+    if (prompt) {
+      this.installPrompt = undefined; this.installAvailable.set(false);
+      try {
+        await prompt.prompt();
+        const choice = await prompt.userChoice;
+        if (choice.outcome === 'accepted') this.standalone.set(true);
+      } catch { this.notify('Installation unavailable'); }
+      return;
+    }
+    if (this.isIosDevice()) this.openDialog('install');
+    else this.notify('Installation is unavailable in this browser');
   }
   async applyUpdate(): Promise<void> {
     if (!this.swUpdate.isEnabled) return;

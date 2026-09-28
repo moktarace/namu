@@ -1,12 +1,15 @@
 @font-face { font-family:Roboto; src:url('/fonts/Roboto.ttf') format('truetype'); font-style:normal; font-weight:100 900; font-display:swap; }
 @font-face { font-family:Roboto; src:url('/fonts/RobotoStatic-Regular.ttf') format('truetype'); font-style:normal; font-weight:400; font-display:swap; }
 @font-face { font-family:'Namu Noto Sans'; src:url('/fonts/NotoSans.ttf') format('truetype'); font-style:normal; font-weight:100 900; font-display:block; }
-:root { color-scheme:dark; font-family:Roboto,Arial,sans-serif; background:#414141; color:#fff; font-size:16px; -webkit-font-smoothing:antialiased; }
+:root { color-scheme:dark; font-family:Roboto,Arial,sans-serif; background:#414141; color:#fff; font-size:16px; -webkit-font-smoothing:antialiased; -webkit-text-size-adjust:100%; }
 * { box-sizing:border-box; }
-html,body { margin:0; width:100%; height:100%; overflow:hidden; overscroll-behavior:none; }
+html,body { margin:0; width:100%; height:100%; overflow:hidden; overscroll-behavior:none; touch-action:manipulation; }
 body { padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
 button,input,select,textarea { font:inherit; color:inherit; }
 button,a { -webkit-tap-highlight-color:transparent; }
+button,button img,a img,.toolbar,.device-tabs,.page-open,.page-card footer,.export-fab,.preference,.popup-menu,.walkthrough button { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+img { -webkit-user-drag:none; user-select:none; }
+input,textarea { -webkit-user-select:text; user-select:text; -webkit-touch-callout:default; }
 button { border:0; border-radius:0; background:transparent; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
 button:hover { background-color:#ffffff11; }
 button:active { background-color:#ffffff33; }

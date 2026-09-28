@@ -2,11 +2,12 @@
   <button class="nav-button" aria-label="Back" (click)="requestNavigation(-1)"><img [src]="image('ic_navigation_back')" alt=""></button>
   <div class="toolbar-title"><span>{{ title }}</span><small>{{ pageNumber }} / {{ pageCount }}</small></div>
   <span class="save-state" [class.saving]="saving()" [class.pending]="autoSavePending()" aria-live="polite">{{ saveLabel() }}</span>
-  <span class="active-tool" aria-live="polite">{{ labels[tool()] }} · {{ toolShortcuts[tool()] }}</span>
+  <span class="active-tool" aria-live="polite">{{ panelEditMode() ? 'Panels · direct editing' : labels[tool()] + ' · ' + toolShortcuts[tool()] }}</span>
   <button class="action-button" aria-label="Previous Page" [disabled]="pageNumber === 1 || busy()" (click)="requestNavigation(pageNumber - 2)"><img [src]="image('ic_action_previous_' + (pageNumber === 1 ? 'disabled' : 'enabled'))" alt=""></button>
   <button class="action-button" aria-label="Next Page" [disabled]="busy()" (click)="requestNavigation(pageNumber)"><img [src]="image('ic_action_next_enabled')" alt=""></button>
   <button class="action-button" aria-label="Save" [disabled]="!dirty() || busy()" (click)="save()"><img [src]="image('ic_action_save_on_device_' + (dirty() ? 'enabled' : 'disabled'))" alt=""></button>
-  <button class="action-button panel-action" aria-label="Panel template" [disabled]="busy()" (click)="openPanelDialog()"><span aria-hidden="true">▦</span></button>
+  <button class="action-button panel-action" [class.active]="panelEditMode()" [attr.aria-label]="panelActionLabel()" [attr.aria-pressed]="panelLayout() ? panelEditMode() : null" [disabled]="busy()" (click)="panelAction()"><span aria-hidden="true">{{ panelEditMode() ? '✓' : '▦' }}</span></button>
+  @if (panelEditMode()) { <button class="action-button panel-clear-action" aria-label="Clear panel layout" [disabled]="busy()" (click)="clearPanelLayout()"><span aria-hidden="true">⊟</span></button> }
 </header>
 <div #stage class="stage" (pointerdown)="pointerDown($event)" (pointermove)="pointerMove($event)" (pointerup)="pointerUp($event)" (pointercancel)="pointerUp($event)" (wheel)="wheel($event)">
   <div class="paper" [style.transform]="paperTransform()">
@@ -15,6 +16,18 @@
     @if (panelLayout(); as layout) {
       <svg class="panel-guides" viewBox="0 0 1000 1414" aria-hidden="true">
         @for (panel of layout.panels; track $index) { <rect [attr.x]="panel.x" [attr.y]="panel.y" [attr.width]="panel.width" [attr.height]="panel.height"></rect> }
+      </svg>
+    }
+    @if (panelEditMode() && panelLayout(); as layout) {
+      <svg class="panel-edit-overlay" viewBox="0 0 1000 1414" (pointerdown)="panelPointerDown($event)" (pointermove)="panelPointerMove($event)" (pointerup)="panelPointerUp($event)" (pointercancel)="panelPointerUp($event)">
+        <rect class="panel-edit-surface" x="0" y="0" width="1000" height="1414"></rect>
+        @if (panelCutPreview(); as cut) {
+          @if (cut.orientation === 'vertical') {
+            <line class="panel-cut-preview" [attr.x1]="cut.position" [attr.x2]="cut.position" [attr.y1]="layout.panels[cut.panelIndex].y" [attr.y2]="layout.panels[cut.panelIndex].y + layout.panels[cut.panelIndex].height"></line>
+          } @else {
+            <line class="panel-cut-preview" [attr.x1]="layout.panels[cut.panelIndex].x" [attr.x2]="layout.panels[cut.panelIndex].x + layout.panels[cut.panelIndex].width" [attr.y1]="cut.position" [attr.y2]="cut.position"></line>
+          }
+        }
       </svg>
     }
     @for (text of texts(); track text.id) {
@@ -76,9 +89,6 @@
     }
     @case ('text') {
       <form (ngSubmit)="confirmText()"><div class="dialog-body text-body"><div class="text-title">Insert Text</div><div class="text-input-row"><textarea aria-label="Text" name="text" [(ngModel)]="textValue" rows="1" autofocus></textarea><button type="button" class="voice" aria-label="Voice input" (click)="voiceInput()"><img [src]="image('ic_action_voice_input')" alt=""></button></div><div class="text-settings"><label>Text Direction<span><input type="checkbox" name="vertical" [(ngModel)]="textVertical">Vertical</span></label><label>Text Size<select name="size" [(ngModel)]="textSize"><option [ngValue]="12">S</option><option [ngValue]="16">M</option><option [ngValue]="24">L</option><option [ngValue]="34">XL</option></select></label></div></div><div class="dialog-buttons"><button type="button" (click)="closeDialog()">Cancel</button><button type="submit">Confirm</button></div></form>
-    }
-    @case ('panels') {
-      <form (ngSubmit)="applyPanelTemplate()"><h2 class="dialog-title">Panel templates</h2><button type="button" class="panel-template-clear" [class.selected]="panelTemplateValue === 'none'" [attr.aria-pressed]="panelTemplateValue === 'none'" (click)="panelTemplateValue = 'none'">Remove panels</button><div class="panel-template-grid">@for (template of panelTemplates; track template[0]) { <button type="button" class="panel-template-option" [class.selected]="panelTemplateValue === template[0]" [attr.aria-pressed]="panelTemplateValue === template[0]" (click)="panelTemplateValue = template[0]"><span class="panel-template-preview">@for (panel of previewPanels(template[0]); track $index) { <span class="panel-template-cell" [style.left]="panel.x / 10 + '%'" [style.top]="panel.y / 14.14 + '%'" [style.width]="panel.width / 10 + '%'" [style.height]="panel.height / 14.14 + '%'" ></span> }</span><span class="panel-template-label">{{ template[1] }}</span></button> }</div><div class="dialog-buttons"><button type="button" (click)="closeDialog()">Cancel</button><button type="submit">Apply</button></div></form>
     }
     @case ('clear') { <div class="dialog-body">Do you really wish to delete them all?</div><div class="dialog-buttons"><button (click)="closeDialog()">Cancel</button><button (click)="clearAll()">Clear all</button></div> }
     @case ('leave') { <div class="dialog-body">Do you wish to leave the page without saving?</div><div class="dialog-buttons"><button (click)="closeDialog()">Cancel</button><button (click)="discardAndLeave()">Leave without saving</button></div> }

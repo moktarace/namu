@@ -8,7 +8,12 @@
 canvas,.guide,.lasso,.panel-guides { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
 .panel-guides { z-index:2; }
 .panel-guides rect { fill:#4db6ac0a; stroke:#008b8b; stroke-width:3; vector-effect:non-scaling-stroke; }
-.panel-action span { display:block; width:40px; height:40px; color:#80cbc4; font-size:29px; line-height:38px; text-align:center; }
+.panel-action span { display:block; width:40px; height:40px; color:#80cbc4; font-size:26px; line-height:38px; text-align:center; }
+.panel-action.active { background:#00695c; }
+.panel-clear-action span { display:block; width:40px; height:40px; color:#80cbc4; font-size:24px; line-height:38px; text-align:center; }
+.panel-edit-overlay { position:absolute; inset:0; z-index:3; width:100%; height:100%; pointer-events:auto; touch-action:none; }
+.panel-edit-surface { fill:#4db6ac08; stroke:none; }
+.panel-cut-preview { stroke:#ffcc80; stroke-width:4; stroke-dasharray:16 10; vector-effect:non-scaling-stroke; pointer-events:none; }
 .editable-text { position:absolute; cursor:move; touch-action:none; line-height:0; padding:50px; }
 .editable-text>img { pointer-events:none; max-width:none; }
 .editable-text.selected { background:#00000018; }
@@ -64,14 +69,6 @@ canvas,.guide,.lasso,.panel-guides { position:absolute; inset:0; width:100%; hei
 .colors button { padding:6px; }
 .colors span { display:block; width:28px; height:28px; }
 .no-properties { width:162px; height:162px; }
-.panel-template-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:8px 16px 16px; max-height:60dvh; overflow-y:auto; }
-.panel-template-clear { margin:8px 16px 0; padding:8px 10px; border:1px solid #777; background:#313131; color:#fff; text-align:left; }
-.panel-template-clear.selected { border:2px solid #4db6ac; padding:7px 9px; background:#ffffff18; }
-.panel-template-option { display:flex; flex-direction:column; align-items:stretch; gap:6px; min-height:154px; padding:8px; border:1px solid #777; background:#313131; color:#fff; text-align:left; }
-.panel-template-option.selected { border:2px solid #4db6ac; padding:7px; background:#ffffff18; }
-.panel-template-preview { position:relative; display:block; width:96px; aspect-ratio:1000 / 1414; margin:0 auto; background:#fff; overflow:hidden; }
-.panel-template-cell { position:absolute; display:block; box-sizing:border-box; border:2px solid #008b8b; background:#4db6ac12; }
-.panel-template-label { font-size:12px; line-height:16px; }
 .text-title { height:32px; display:flex; align-items:center; }
 .text-input-row { display:flex; align-items:flex-end; }
 .text-input-row textarea { flex:1; width:0; min-height:40px; margin-bottom:8px; resize:vertical; }

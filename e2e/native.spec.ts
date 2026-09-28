@@ -83,29 +83,57 @@ test('creates pages with distributed dialogue text from a simple script', async 
   await expect(page.getByRole('img', { name: 'One', exact: true })).toBeVisible();
 });
 
-test('applies a visual panel template without selecting or numbering individual panels', async ({ page }) => {
-  await create(page, 'Panel template check');
-  await page.getByRole('button', { name: 'Panel template', exact: true }).click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('button', { name: 'Remove panels', exact: true })).toBeVisible();
-  await dialog.getByRole('button', { name: '4 panels · Template 1', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Apply', exact: true }).click();
-  await expect(page.locator('.panel-guides rect')).toHaveCount(4);
+test('starts from one case and edits the panel layout directly', async ({ page }) => {
+  await create(page, 'Direct panel editing check');
+  await expect(page.getByRole('button', { name: 'Panels', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Panel template', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Panels', exact: true }).click();
+  await expect(page.locator('.panel-guides rect')).toHaveCount(1);
+  await expect(page.locator('[aria-label="Finish panel editing"]')).toBeVisible();
+  await expect(page.locator('.active-tool')).toHaveText('Panels · direct editing');
+  await stroke(page, [[250, 700], [750, 700]]);
+  await expect(page.locator('.panel-guides rect')).toHaveCount(2);
+  const gutter = await point(page, 500, 700);
+  await page.mouse.dblclick(gutter.x, gutter.y);
+  await expect(page.locator('.panel-guides rect')).toHaveCount(1);
   await expect(page.locator('.panel-guides')).toHaveCSS('pointer-events', 'none');
   await expect(page.locator('.panel-guides text')).toHaveCount(0);
   await save(page);
   await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings of each Draft', exact: true }).click();
+  const draftSettings = page.getByRole('dialog');
+  const showPanels = draftSettings.getByRole('checkbox', { name: 'Show panel borders in storyboard and export', exact: true });
+  await expect(showPanels).toBeVisible();
+  await showPanels.check();
+  await draftSettings.getByRole('button', { name: 'Confirm', exact: true }).click();
+  await expect(page.locator('.storyboard-panel-overlay')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Hide panel borders', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Page1', exact: true }).click();
-  await expect(page.locator('.panel-guides rect')).toHaveCount(4);
+  await expect(page.locator('.panel-guides rect')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Edit panels', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await page.getByRole('button', { name: 'Select image', exact: true }).click();
   const exportDialog = page.getByRole('dialog');
   const includePanels = exportDialog.getByRole('checkbox', { name: 'Include panel borders', exact: true });
   await expect(includePanels).toBeVisible();
-  await includePanels.check();
   await expect(includePanels).toBeChecked();
   await exportDialog.getByRole('tab', { name: 'Storyboard', exact: true }).click();
   await expect(exportDialog.getByRole('checkbox', { name: 'Include panel borders', exact: true })).toBeChecked();
+  await includePanels.uncheck();
+  await exportDialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.locator('.storyboard-panel-overlay')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Show panel borders', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Page1', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit panels', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Clear panel layout', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Clear panel layout', exact: true }).click();
+  await expect(page.locator('.panel-guides')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Panels', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(page.locator('.panel-guides rect')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  await expect(page.locator('.panel-guides')).toHaveCount(0);
+  await save(page);
 });
 
 test('autosaves after idle and exposes the save state', async ({ page }) => {
@@ -284,7 +312,7 @@ test('sample progression, guides, reorder, copy and real PNG/ZIP exports', async
   await page.getByRole('button', { name: 'Settings of each Draft', exact: true }).click();
   await page.getByRole('combobox', { name: 'Page-Progression-Direction' }).selectOption('ttb');
   await page.getByRole('combobox', { name: 'Guide settings' }).selectOption('grid1');
-  await expect(page.getByRole('checkbox')).toBeDisabled();
+  await expect(page.getByRole('checkbox', { name: 'Set the first page to double-page spread in single-page view', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Confirm', exact: true }).click();
   await expect(page.locator('.page-card footer>span')).toHaveText(['Page 1', 'Page 2', 'Page 3', 'Page 4', 'Page 5']);
   await expect(page.locator('.page-guide')).toHaveCount(5);

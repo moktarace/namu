@@ -1,11 +1,12 @@
 import { AfterViewInit, Component, ElementRef, EventEmitter, HostListener, Input, OnDestroy, Output, ViewChild, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { NativePage, NativePanelLayout, NativeText, NativeTool, PANEL_TEMPLATES, PAGE_HEIGHT, PAGE_WIDTH, PanelTemplate, loadImage, nativeImage, pageBitmap, panelLayout, textBitmap } from './native-model';
+import { NativePage, NativePanelLayout, NativeText, NativeTool, PAGE_HEIGHT, PAGE_WIDTH, loadImage, mergePanels, nativeImage, pageBitmap, panelLayout, splitPanel, textBitmap } from './native-model';
 
 interface Point { x: number; y: number }
 interface Frame { bitmap: string; texts: NativeText[]; panels: NativePanelLayout | null }
 interface SelectedText { text: NativeText; offsetX: number; offsetY: number }
 interface Selection { src: string; x: number; y: number; width: number; height: number; rotation: number; flip: boolean; lasso: boolean; outline?: string; textItems?: SelectedText[] }
+interface PanelCutPreview { panelIndex: number; orientation: 'vertical' | 'horizontal'; position: number }
 @Component({
   selector: 'native-editor', standalone: true, imports: [FormsModule],
   templateUrl: './native-editor.html', styleUrl: './native-editor.scss',
@@ -57,13 +58,14 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
   readonly selectedText = signal<string | null>(null);
   readonly selection = signal<Selection | null>(null);
   readonly fullScreen = signal(false);
+  readonly panelEditMode = signal(false);
+  readonly panelCutPreview = signal<PanelCutPreview | null>(null);
+  readonly panelActionLabel = computed(() => this.panelEditMode() ? 'Finish panel editing' : this.panelLayout() ? 'Edit panels' : 'Panels');
   readonly verticalBar = signal(true);
   readonly bar = signal({ x: 0, y: 1 / this.density });
   readonly view = signal({ x: 0, y: 0, scale: 1, rotation: 0 });
-  readonly dialogType = signal<'tool' | 'text' | 'panels' | 'clear' | 'leave' | null>(null);
-  readonly panelTemplates = PANEL_TEMPLATES;
+  readonly dialogType = signal<'tool' | 'text' | 'clear' | 'leave' | null>(null);
   readonly panelLayout = signal<NativePanelLayout | null>(null);
-  panelTemplateValue: PanelTemplate = 'none';
   readonly stampOpen = signal(true);
   readonly stampTab = signal<'mark' | 'face'>('mark');
   readonly stamps = computed(() => this.stampTab() === 'mark'
@@ -87,6 +89,9 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
   private textImages = new Map<string, { src: string; width: number; height: number }>();
   private destroyed = false;
   private speechAbort?: () => void;
+  private panelStroke: Point[] = [];
+  private panelPointerId?: number;
+  private lastPanelTap?: { x: number; y: number; time: number; pair: string };
   private autoSaveTimer?: ReturnType<typeof setTimeout>;
   private dialogReturnFocus?: HTMLElement;
   private requestRevision = 0;
@@ -133,11 +138,13 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
       if (this.page.bitmap) this.ctx.drawImage(await loadImage(this.page.bitmap), 0, 0, PAGE_WIDTH, PAGE_HEIGHT);
       this.texts.set(structuredClone(this.page.texts));
       const savedPanels = this.page.panels;
-      this.panelLayout.set(savedPanels
-        ? (!savedPanels.verticalGutter || !savedPanels.horizontalGutter
-          ? panelLayout(savedPanels.template, savedPanels.margin, savedPanels.gutter)
-          : structuredClone(savedPanels))
-        : null);
+      if (savedPanels) {
+        const layout = structuredClone(savedPanels);
+        layout.template = 'one';
+        layout.verticalGutter ??= Math.max(4, Math.round(layout.gutter * .75));
+        layout.horizontalGutter ??= Math.max(layout.verticalGutter + 4, Math.round(layout.gutter * 1.33));
+        this.panelLayout.set(layout);
+      } else this.panelLayout.set(null);
       this.frames = [this.frame()]; this.savedKey = JSON.stringify(this.frames[0]);
       this.saving.set(false); this.autoSavePending.set(false);
       this.fit();
@@ -221,7 +228,7 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
     this.gesture = { distance: Math.hypot(a.x - b.x, a.y - b.y), angle: Math.atan2(b.y - a.y, b.x - a.x), center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, view: { ...this.view() } };
   }
   pointerDown(e: PointerEvent): void {
-    if (this.busy() || e.button !== 0 || (e.target as HTMLElement).closest('button,.floating-bar,.stamp-panel,.selection,.editable-text')) return;
+    if (this.busy() || e.button !== 0 || (e.target as HTMLElement).closest('button,.floating-bar,.stamp-panel,.panel-edit-overlay,.selection,.editable-text')) return;
     e.preventDefault(); this.stage.nativeElement.setPointerCapture(e.pointerId);
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (this.pointers.size > 1) {
@@ -270,6 +277,91 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
     } else if (this.tool() === 'lasso') this.finishLasso();
     else { this.renderStroke(); this.record(); }
     this.stroke = []; this.strokeBefore = undefined;
+  }
+  panelPointerDown(e: PointerEvent): void {
+    if (this.busy() || !this.panelEditMode() || e.button !== 0) return;
+    e.preventDefault(); e.stopPropagation();
+    (e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
+    this.panelPointerId = e.pointerId;
+    const point = this.toPage(e.clientX, e.clientY);
+    this.panelStroke = [point];
+    this.panelCutPreview.set(this.panelPreview(point, point));
+  }
+  panelPointerMove(e: PointerEvent): void {
+    if (this.panelPointerId !== e.pointerId) return;
+    e.preventDefault(); e.stopPropagation();
+    const point = this.toPage(e.clientX, e.clientY);
+    this.panelStroke.push(point);
+    this.panelCutPreview.set(this.panelPreview(this.panelStroke[0], point));
+  }
+  panelPointerUp(e: PointerEvent): void {
+    if (this.panelPointerId !== e.pointerId) return;
+    e.preventDefault(); e.stopPropagation();
+    if (e.type === 'pointercancel') {
+      this.panelStroke = []; this.panelPointerId = undefined; this.panelCutPreview.set(null);
+      return;
+    }
+    const start = this.panelStroke[0], end = this.toPage(e.clientX, e.clientY);
+    const distance = start ? Math.hypot(end.x - start.x, end.y - start.y) : 0;
+    if (start && distance >= 24) {
+      const preview = this.panelPreview(start, end);
+      if (preview) this.applyPanelSplit(preview);
+      this.lastPanelTap = undefined;
+    } else {
+      const gutter = this.findPanelGutter(end);
+      if (gutter) {
+        const now = performance.now(), pair = `${gutter[0]}:${gutter[1]}`;
+        if (this.lastPanelTap && this.lastPanelTap.pair === pair && now - this.lastPanelTap.time < 420 && Math.hypot(end.x - this.lastPanelTap.x, end.y - this.lastPanelTap.y) < 28) {
+          this.applyPanelMerge(gutter[0], gutter[1]);
+          this.lastPanelTap = undefined;
+        } else this.lastPanelTap = { x: end.x, y: end.y, time: now, pair };
+      } else this.lastPanelTap = undefined;
+    }
+    this.panelStroke = []; this.panelPointerId = undefined; this.panelCutPreview.set(null);
+  }
+  private panelPreview(start: Point, end: Point): PanelCutPreview | null {
+    const layout = this.panelLayout(); if (!layout) return null;
+    const panelIndex = layout.panels.findIndex(panel => start.x >= panel.x && start.x <= panel.x + panel.width && start.y >= panel.y && start.y <= panel.y + panel.height);
+    if (panelIndex < 0) return null;
+    const panel = layout.panels[panelIndex];
+    const orientation: PanelCutPreview['orientation'] = Math.abs(end.x - start.x) >= Math.abs(end.y - start.y) ? 'vertical' : 'horizontal';
+    const position = orientation === 'vertical' ? (start.x + end.x) / 2 : (start.y + end.y) / 2;
+    const minimum = 90;
+    const gutter = orientation === 'vertical' ? (layout.verticalGutter || 10) : (layout.horizontalGutter || 18);
+    const lower = orientation === 'vertical' ? panel.x + minimum + gutter / 2 : panel.y + minimum + gutter / 2;
+    const upper = orientation === 'vertical' ? panel.x + panel.width - minimum - gutter / 2 : panel.y + panel.height - minimum - gutter / 2;
+    if (lower >= upper) return null;
+    return { panelIndex, orientation, position: Math.max(lower, Math.min(upper, position)) };
+  }
+  private applyPanelSplit(preview: PanelCutPreview): void {
+    const layout = this.panelLayout(); if (!layout) return;
+    const next = splitPanel(layout, preview.panelIndex, preview.orientation, preview.position);
+    if (!next) return;
+    this.panelLayout.set(next); this.record(); this.message.emit('Case découpée. Double-tape la gouttière pour fusionner.');
+  }
+  private findPanelGutter(point: Point): [number, number] | null {
+    const layout = this.panelLayout(); if (!layout) return null;
+    let best: { pair: [number, number]; distance: number } | null = null;
+    for (let i = 0; i < layout.panels.length; i++) for (let j = i + 1; j < layout.panels.length; j++) {
+      const a = layout.panels[i], b = layout.panels[j];
+      const overlapY = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+      const overlapX = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+      const verticalGap = a.x + a.width <= b.x ? b.x - (a.x + a.width) : b.x + b.width <= a.x ? a.x - (b.x + b.width) : Infinity;
+      const horizontalGap = a.y + a.height <= b.y ? b.y - (a.y + a.height) : b.y + b.height <= a.y ? a.y - (b.y + b.height) : Infinity;
+      const verticalEdge = a.x + a.width <= b.x ? a.x + a.width + verticalGap / 2 : b.x + b.width <= a.x ? b.x + b.width + verticalGap / 2 : 0;
+      const horizontalEdge = a.y + a.height <= b.y ? a.y + a.height + horizontalGap / 2 : b.y + b.height <= a.y ? b.y + b.height + horizontalGap / 2 : 0;
+      const verticalDistance = overlapY > 30 && verticalGap <= Math.max(30, (layout.verticalGutter || 10) * 2.5) ? Math.abs(point.x - verticalEdge) : Infinity;
+      const horizontalDistance = overlapX > 30 && horizontalGap <= Math.max(30, (layout.horizontalGutter || 18) * 2.5) ? Math.abs(point.y - horizontalEdge) : Infinity;
+      const distance = Math.min(verticalDistance, horizontalDistance);
+      if (distance <= 26 && (!best || distance < best.distance)) best = { pair: [i, j], distance };
+    }
+    return best?.pair || null;
+  }
+  private applyPanelMerge(first: number, second: number): void {
+    const layout = this.panelLayout(); if (!layout) return;
+    const next = mergePanels(layout, first, second);
+    if (!next) { this.message.emit('Ces cases ne forment pas un rectangle fusionnable.'); return; }
+    this.panelLayout.set(next); this.record(); this.message.emit('Cases fusionnées.');
   }
   readonly lassoPath = signal('');
   private clearLasso(): void { this.lassoPath.set(''); }
@@ -542,18 +634,24 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
     else this.navigate.emit(index);
   }
   discardAndLeave(): void { this.closeDialog(); this.navigate.emit(this.pendingNavigation); }
-  openPanelDialog(): void {
-    this.panelTemplateValue = this.panelLayout()?.template || 'none';
-    this.openDialog('panels');
+  panelAction(): void {
+    if (this.busy()) return;
+    if (!this.panelLayout()) { this.panelLayout.set(panelLayout()); this.record(); }
+    this.panelEditMode.update(value => !value);
+    this.panelCutPreview.set(null); this.panelStroke = []; this.lastPanelTap = undefined;
+    this.message.emit(this.panelEditMode()
+      ? 'Mode cases activé. Trace un trait pour découper. Double-tape une gouttière pour fusionner.'
+      : 'Mode cases terminé.');
   }
-  previewPanels(template: PanelTemplate): NativePanelLayout['panels'] {
-    return template === 'none' ? [] : panelLayout(template).panels;
+  clearPanelLayout(): void {
+    if (this.busy() || !this.panelLayout()) return;
+    this.panelLayout.set(null);
+    this.panelEditMode.set(false);
+    this.panelCutPreview.set(null); this.panelStroke = []; this.panelPointerId = undefined; this.lastPanelTap = undefined;
+    this.record();
+    this.message.emit('Layout de cases supprimé.');
   }
-  applyPanelTemplate(): void {
-    this.panelLayout.set(this.panelTemplateValue === 'none' ? null : panelLayout(this.panelTemplateValue));
-    this.record(); this.closeDialog();
-  }
-  openDialog(type: 'tool' | 'text' | 'panels' | 'clear' | 'leave'): void {
+  openDialog(type: 'tool' | 'text' | 'clear' | 'leave'): void {
     const wasOpen = this.dialog.nativeElement.open;
     if (!wasOpen) {
       const active = document.activeElement;

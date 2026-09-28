@@ -57,7 +57,7 @@ export class App {
   readonly updateAvailable = signal(false);
   readonly hand = signal(localStorage.getItem('manganame-hand') || 'right_handed');
   readonly volume = signal(localStorage.getItem('manganame-volume') || 'none');
-  titleValue = ''; guideValue = ''; directionValue: Direction = 'rtl'; spreadValue = true; spreadViewValue = true;
+  titleValue = ''; guideValue = ''; directionValue: Direction = 'rtl'; spreadValue = true; spreadViewValue = true; showPanelsValue = false;
   scriptValue = '';
   private targetId = '';
   private toastTimer?: ReturnType<typeof setTimeout>;
@@ -90,6 +90,7 @@ export class App {
     }
     this.route = route;
     this.selectedId.set(route.draftId || null);
+    if (draft && route.screen === 'pages') this.setPanelBorders(draft.showPanels === true);
     if (page && draft && route.screen === 'editor') {
       this.editorIndex.set(draft.pages.indexOf(page)); this.editorPages.set([structuredClone(page)]);
     } else this.editorPages.set([]);
@@ -293,7 +294,7 @@ export class App {
       }
       if (type === 'delete-draft') await this.store.remove(this.targetId);
       if (type === 'delete-page' && draft) await this.store.save({ ...draft, pages: draft.pages.filter(p => p.id !== this.targetId), updatedAt: Date.now() });
-      if (type === 'page-settings' && draft) await this.store.save({ ...draft, guide: this.guideValue, direction: this.directionValue, firstSpread: this.directionValue === 'ttb' ? false : this.spreadValue, spreadView: this.directionValue === 'ttb' ? false : this.spreadViewValue, updatedAt: Date.now() });
+      if (type === 'page-settings' && draft) { await this.store.save({ ...draft, guide: this.guideValue, direction: this.directionValue, firstSpread: this.directionValue === 'ttb' ? false : this.spreadValue, spreadView: this.directionValue === 'ttb' ? false : this.spreadViewValue, showPanels: this.showPanelsValue, updatedAt: Date.now() }); this.setPanelBorders(this.showPanelsValue); }
       if (type === 'order' && draft) await this.store.save({ ...draft, pages: [...this.order()], updatedAt: Date.now() });
       this.saving.set(false); this.closeDialog();
     } catch { this.saving.set(false); this.notify('Saving failed'); }
@@ -321,7 +322,7 @@ export class App {
     catch { this.notify('Saving failed'); }
   }
   pageSettings(): void {
-    const draft = this.draft()!; this.guideValue = draft.guide; this.directionValue = draft.direction; this.spreadValue = draft.firstSpread; this.spreadViewValue = draft.spreadView === true; this.openDialog('page-settings');
+    const draft = this.draft()!; this.guideValue = draft.guide; this.directionValue = draft.direction; this.spreadValue = draft.firstSpread; this.spreadViewValue = draft.spreadView === true; this.showPanelsValue = this.includePanels; this.openDialog('page-settings');
   }
   directionChanged(value: Direction): void {
     this.directionValue = value;
@@ -344,7 +345,9 @@ export class App {
     if (!['ArrowUp', 'ArrowDown'].includes(e.key)) return; e.preventDefault();
     this.order.update(list => { const next = [...list], index = next.findIndex(p => p.id === id), target = Math.max(0, Math.min(next.length - 1, index + (e.key === 'ArrowUp' ? -1 : 1))); next.splice(target, 0, next.splice(index, 1)[0]); return next; });
   }
-  exportDialog(): void { this.selectedExports.set([]); this.selectedSpreads.set([]); this.exportMode.set('pages'); this.includePanels = false; this.openDialog('export'); }
+  setPanelBorders(value: boolean): void { this.includePanels = value; this.showPanelsValue = value; }
+  togglePanelBorders(): void { this.setPanelBorders(!this.includePanels); }
+  exportDialog(): void { this.selectedExports.set([]); this.selectedSpreads.set([]); this.exportMode.set('pages'); this.openDialog('export'); }
   toggleExport(id: string): void { this.selectedExports.update(list => list.includes(id) ? list.filter(v => v !== id) : [...list, id]); }
   toggleSpreadExport(index: number): void { this.selectedSpreads.update(list => list.includes(index) ? list.filter(v => v !== index) : [...list, index]); }
   setExportMode(mode: ExportMode): void {

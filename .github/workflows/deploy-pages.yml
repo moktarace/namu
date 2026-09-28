@@ -1,4 +1,4 @@
-name: Deploy MangaName PWA to GitHub Pages
+name: Deploy Namu to GitHub Pages
 
 on:
   push:
@@ -25,22 +25,20 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: manganame-pwa/package-lock.json
+          cache-dependency-path: package-lock.json
       - name: Install dependencies
-        working-directory: manganame-pwa
         run: npm ci
       - name: Build for the repository path
-        working-directory: manganame-pwa
         run: npm run build -- --base-href "/${{ github.event.repository.name }}/"
       - name: Make font URLs relative to the Pages project
         run: |
-          find manganame-pwa/dist/manganame-pwa/browser -name '*.css' -exec sed -i "s#url(/fonts/#url(/${{ github.event.repository.name }}/fonts/#g; s#url('/fonts/#url('/${{ github.event.repository.name }}/fonts/#g" {} +
+          find dist/namu/browser -name '*.css' -exec sed -i "s#url(/fonts/#url(/${{ github.event.repository.name }}/fonts/#g; s#url('/fonts/#url('/${{ github.event.repository.name }}/fonts/#g" {} +
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: manganame-pwa/dist/manganame-pwa/browser
+          path: dist/namu/browser
 
   deploy:
     environment:

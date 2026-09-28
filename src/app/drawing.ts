@@ -89,4 +89,4 @@ export const safeFilename = (name: string) =>
   name
     .replace(/[^\p{L}\p{N}\s_-]/gu, '')
     .trim()
-    .slice(0, 90) || 'manganame';
+    .slice(0, 90) || 'Namu';

@@ -1,12 +1,14 @@
 import { AfterViewInit, Component, ElementRef, EventEmitter, HostListener, Input, OnDestroy, Output, ViewChild, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { NativePage, NativePanelLayout, NativeText, NativeTool, PAGE_HEIGHT, PAGE_WIDTH, loadImage, mergePanels, nativeImage, pageBitmap, panelLayout, splitPanel, textBitmap } from './native-model';
+import { NativePage, NativePanelLayout, NativeText, NativeTool, PAGE_HEIGHT, PAGE_WIDTH, loadImage, mergePanels, nativeImage, panelLayout, splitPanel, textBitmap } from './native-model';
 
 interface Point { x: number; y: number }
+interface PaintBounds { x: number; y: number; width: number; height: number }
 interface Frame { bitmap: string; texts: NativeText[]; panels: NativePanelLayout | null }
 interface SelectedText { text: NativeText; offsetX: number; offsetY: number }
 interface Selection { src: string; x: number; y: number; width: number; height: number; rotation: number; flip: boolean; lasso: boolean; outline?: string; textItems?: SelectedText[] }
 interface PanelCutPreview { panelIndex: number; orientation: 'vertical' | 'horizontal'; position: number }
+const MAX_HISTORY_FRAMES = 16;
 @Component({
   selector: 'native-editor', standalone: true, imports: [FormsModule],
   templateUrl: './native-editor.html', styleUrl: './native-editor.scss',
@@ -76,11 +78,13 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
   private editingText: string | null = null;
   private frames: Frame[] = [];
   private cursor = 0;
-  private savedKey = '';
+  private savedFrame?: Frame;
   private ctx!: CanvasRenderingContext2D;
   private resizeObserver?: ResizeObserver;
   private stroke: Point[] = [];
   private strokeBefore?: ImageData;
+  private previewBounds?: PaintBounds;
+  private renderedPointCount = 0;
   private pointers = new Map<number, Point>();
   private gesture?: { distance: number; angle: number; center: Point; view: { x: number; y: number; scale: number; rotation: number } };
   private pendingNavigation = -1;
@@ -145,7 +149,7 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
         layout.horizontalGutter ??= Math.max(layout.verticalGutter + 4, Math.round(layout.gutter * 1.33));
         this.panelLayout.set(layout);
       } else this.panelLayout.set(null);
-      this.frames = [this.frame()]; this.savedKey = JSON.stringify(this.frames[0]);
+      this.frames = [this.frame()]; this.savedFrame = this.frames[0];
       this.saving.set(false); this.autoSavePending.set(false);
       this.fit();
       if (this.leftHanded) this.bar.set({ x: Math.max(0, this.stage.nativeElement.clientWidth - this.floating.nativeElement.offsetWidth), y: 1 / this.density });
@@ -223,7 +227,7 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
   barUp(): void { this.barDrag = undefined; }
   private beginGesture(): void {
     if (this.strokeBefore) this.ctx.putImageData(this.strokeBefore, 0, 0);
-    this.stroke = []; this.strokeBefore = undefined; this.clearLasso();
+    this.stroke = []; this.strokeBefore = undefined; this.previewBounds = undefined; this.renderedPointCount = 0; this.clearLasso();
     const [a, b] = [...this.pointers.values()];
     this.gesture = { distance: Math.hypot(a.x - b.x, a.y - b.y), angle: Math.atan2(b.y - a.y, b.x - a.x), center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, view: { ...this.view() } };
   }
@@ -244,6 +248,7 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
     if (this.tool() === 'stamp') { this.stampOpen.set(true); return; }
     this.stroke = [p];
     this.strokeBefore = this.ctx.getImageData(0, 0, PAGE_WIDTH, PAGE_HEIGHT);
+    this.previewBounds = undefined; this.renderedPointCount = 0;
     this.renderStroke();
   }
   pointerMove(e: PointerEvent): void {
@@ -273,10 +278,10 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
     if (!this.stroke.length) return;
     if (e.type === 'pointercancel') {
       if (this.strokeBefore) this.ctx.putImageData(this.strokeBefore, 0, 0);
-      this.clearLasso();
+      this.previewBounds = undefined; this.renderedPointCount = 0; this.clearLasso();
     } else if (this.tool() === 'lasso') this.finishLasso();
     else { this.renderStroke(); this.record(); }
-    this.stroke = []; this.strokeBefore = undefined;
+    this.stroke = []; this.strokeBefore = undefined; this.previewBounds = undefined; this.renderedPointCount = 0;
   }
   panelPointerDown(e: PointerEvent): void {
     if (this.busy() || !this.panelEditMode() || e.button !== 0) return;
@@ -365,9 +370,33 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
   }
   readonly lassoPath = signal('');
   private clearLasso(): void { this.lassoPath.set(''); }
+  private pointBounds(point: Point): PaintBounds {
+    const pad = Math.max(4, this.property().size + 2);
+    const minX = Math.max(0, Math.floor(point.x - pad));
+    const minY = Math.max(0, Math.floor(point.y - pad));
+    const maxX = Math.min(PAGE_WIDTH, Math.ceil(point.x + pad));
+    const maxY = Math.min(PAGE_HEIGHT, Math.ceil(point.y + pad));
+    return { x: minX, y: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
+  }
+  private extendPreviewBounds(): void {
+    for (let index = this.renderedPointCount; index < this.stroke.length; index++) {
+      const next = this.pointBounds(this.stroke[index]);
+      if (!this.previewBounds) this.previewBounds = next;
+      else {
+        const left = Math.min(this.previewBounds.x, next.x), top = Math.min(this.previewBounds.y, next.y);
+        const right = Math.max(this.previewBounds.x + this.previewBounds.width, next.x + next.width);
+        const bottom = Math.max(this.previewBounds.y + this.previewBounds.height, next.y + next.height);
+        this.previewBounds = { x: left, y: top, width: right - left, height: bottom - top };
+      }
+    }
+    this.renderedPointCount = this.stroke.length;
+  }
   private renderStroke(): void {
     if (!this.strokeBefore) return;
-    this.ctx.putImageData(this.strokeBefore, 0, 0);
+    if (this.previewBounds) {
+      const previous = this.previewBounds;
+      this.ctx.putImageData(this.strokeBefore, 0, 0, previous.x, previous.y, previous.width, previous.height);
+    }
     const points = this.stroke, a = points[0], b = points.at(-1)!;
     if (this.tool() === 'lasso') {
       this.lassoPath.set(points.map((p, i) => `${i ? 'L' : 'M'}${p.x},${p.y}`).join(' ') + ' Z'); return;
@@ -389,6 +418,7 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
       c.lineTo(b.x, b.y); c.stroke();
     }
     c.restore();
+    this.extendPreviewBounds();
   }
   private pointInPolygon(point: Point, polygon: Point[]): boolean {
     let inside = false;
@@ -560,14 +590,19 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
   private frame(): Frame { return { bitmap: this.paint.nativeElement.toDataURL(), texts: structuredClone(this.texts()), panels: this.panelLayout() ? structuredClone(this.panelLayout()!) : null }; }
   private record(): void {
     const frame = this.frame();
-    if (JSON.stringify(frame) !== JSON.stringify(this.frames[this.cursor])) {
-      this.frames = [...this.frames.slice(0, this.cursor + 1), frame]; this.cursor++;
+    let frames = [...this.frames.slice(0, this.cursor + 1), frame];
+    let cursor = this.cursor + 1;
+    if (frames.length > MAX_HISTORY_FRAMES + 1) {
+      const removed = frames.length - (MAX_HISTORY_FRAMES + 1);
+      frames = frames.slice(removed); cursor -= removed;
     }
+    this.frames = frames; this.cursor = cursor;
+    if (this.savedFrame && !this.frames.includes(this.savedFrame)) this.savedFrame = undefined;
     this.updateHistory();
   }
   private updateHistory(): void {
     this.undoCount.set(this.cursor); this.redoCount.set(this.frames.length - this.cursor - 1);
-    const dirty = JSON.stringify(this.frames[this.cursor]) !== this.savedKey;
+    const dirty = this.frames[this.cursor] !== this.savedFrame;
     this.dirty.set(dirty);
     if (!dirty) this.cancelAutoSave();
     else if (!this.busy() && !this.selection()) this.scheduleAutoSave();
@@ -607,13 +642,32 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
     if (this.destroyed || !this.dirty() || this.busy() || this.selection()) return;
     await this.persist();
   }
+  private thumbnailDataUrl(): string {
+    const width = 212, scale = width / PAGE_WIDTH, canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = Math.round(PAGE_HEIGHT * scale);
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.save(); ctx.scale(scale, scale);
+    ctx.drawImage(this.paint.nativeElement, 0, 0, PAGE_WIDTH, PAGE_HEIGHT);
+    for (const text of this.texts()) {
+      const bitmap = textBitmap(text);
+      ctx.drawImage(bitmap, text.x, text.y);
+    }
+    const panels = this.panelLayout();
+    if (panels) {
+      ctx.strokeStyle = '#111'; ctx.lineWidth = 1.5;
+      for (const panel of panels.panels) ctx.strokeRect(panel.x, panel.y, panel.width, panel.height);
+    }
+    ctx.restore();
+    return canvas.toDataURL();
+  }
   private async persist(): Promise<void> {
     if (this.busy()) return;
     this.cancelAutoSave();
     this.busy.set(true); this.saving.set(true);
     try {
       const output: NativePage = { ...this.page, bitmap: this.paint.nativeElement.toDataURL(), texts: structuredClone(this.texts()), panels: this.panelLayout() ? structuredClone(this.panelLayout()!) : undefined, thumbnail: '' };
-      output.thumbnail = (await pageBitmap(output, 212)).toDataURL();
+      output.thumbnail = this.thumbnailDataUrl();
       this.pageSave.emit(output);
     } catch { this.message.emit('Saving failed'); this.saving.set(false); this.busy.set(false); }
   }
@@ -625,7 +679,7 @@ export class NativeEditor implements AfterViewInit, OnDestroy {
   }
   markSaved(success = true): void {
     this.saving.set(false);
-    if (success) { this.savedKey = JSON.stringify(this.frame()); this.updateHistory(); }
+    if (success) { this.savedFrame = this.frames[this.cursor]; this.updateHistory(); }
     this.busy.set(false);
   }
   requestNavigation(index: number): void {
